@@ -50,6 +50,17 @@ export async function POST(req) {
       await db.putUser(u);
       break;
     }
+    case 'setSubjects': {
+      const u = await db.getUser(b.username);
+      if (!u) return err('找不到帳號');
+      if (u.role === 'admin') return err('管理員不受科目限制');
+      const cfg = await db.getConfig();
+      const list = (Array.isArray(b.subjects) ? b.subjects : []).filter((x) => cfg.subjects.includes(x));
+      if (!list.length) return err('至少要開放一個科目');
+      u.allowed_subjects = list.length === cfg.subjects.length ? [] : list; // 空陣列 = 不限制
+      await db.putUser(u);
+      break;
+    }
     case 'setAllLimit': {
       const limit = clampLimit(b.limit);
       for (const u of await db.listUsers()) {

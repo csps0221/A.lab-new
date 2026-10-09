@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth';
 import * as db from '@/lib/db';
-import { ocrImages, solve } from '@/lib/ai';
+import { ocrImages, solve, friendlyError } from '@/lib/ai';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -18,7 +18,12 @@ export async function POST(req) {
   if (!text && !images.length) return err('請輸入文字題目或上傳題目圖片!');
 
   const cfg = await db.getConfig();
-  const subject = cfg.subjects.includes(b.subject) ? b.subject : cfg.subjects[0];
+  const allowed = db.allowedSubjects(user, cfg);
+  if (!allowed.length) return err('管理員尚未開放任何科目給你,請聯絡管理員。', 403);
+  const offTopicMsg = `請問${allowed.join('、')}相關的題目`;
+  if (b.subject && !allowed.includes(b.subject)) return err(offTopicMsg, 403);
+  const subject = b.subject || allowed[0];
+  const restricted = user.role !== 'admin' && allowed.length < cfg.subjects.length;
   const depth = db.DEPTHS.includes(b.depth) ? b.depth : '標準詳解';
   const refAnswer = String(b.refAnswer || '').slice(0, 200);
 
@@ -32,7 +37,8 @@ export async function POST(req) {
     try {
       ocr = await ocrImages(images, text, subject, cfg);
     } catch (e) {
-      ocr = `[圖片辨識失敗: ${e.message}]`;
+      if (!text) return err(friendlyError(e), 502); // 沒有文字可用時,辨識失敗就直接回報,不要拿空內容去解題
+      ocr = '[圖片辨識失敗,以下僅依文字內容解題]';
     }
   }
   let question = '';
@@ -41,10 +47,12 @@ export async function POST(req) {
 
   let result;
   try {
-    result = await solve(question, subject, depth, cfg);
+    result = await solve(question, subject, depth, cfg, restricted ? allowed : null);
   } catch (e) {
-    return err(e.message, 502);
+    return err(friendlyError(e), 502);
   }
+
+  if (result.off_topic) return err(offTopicMsg, 422); // 不扣額度、不存紀錄
 
   const record = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -55,6 +63,8 @@ export async function POST(req) {
     ref_answer: refAnswer || '無',
     note: text || '無',
     ...result,
+    question: question.slice(0, 6000),
+    followups: [],
     image_count: images.length,
     admin_feedback: { status: 'pending', comment: '' },
   };

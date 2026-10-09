@@ -75,10 +75,10 @@ function UsersTab({ d, act }) {
         <h4>帳號總覽與狀態</h4>
         <div className="scroll">
           <table>
-            <thead><tr><th>帳號</th><th>身分類別</th><th>今日已用</th><th>每日上限</th><th>密碼狀態</th></tr></thead>
+            <thead><tr><th>帳號</th><th>身分類別</th><th>今日已用</th><th>每日上限</th><th>可問科目</th><th>密碼狀態</th></tr></thead>
             <tbody>
               {normal.map((u) => (
-                <tr key={u.username}><td>{u.username}</td><td>{u.class_name}</td><td>{u.used_today} 題</td><td>{u.limit} 題</td><td>{u.first_login ? '待修改密碼' : '已修改'}</td></tr>
+                <tr key={u.username}><td>{u.username}</td><td>{u.class_name}</td><td>{u.used_today} 題</td><td>{u.limit} 題</td><td>{u.allowed_subjects?.length ? u.allowed_subjects.join('、') : '全部'}</td><td>{u.first_login ? '待修改密碼' : '已修改'}</td></tr>
               ))}
             </tbody>
           </table>
@@ -103,6 +103,8 @@ function UsersTab({ d, act }) {
         ) : <div className="muted">目前沒有可供刪除的一般使用者帳號。</div>}
       </div>
 
+      <SubjectPerm d={d} act={act} />
+
       <div className="card stack">
         <h4>解題額度調整</h4>
         <b>全體一般使用者統一上限</b>
@@ -113,6 +115,31 @@ function UsersTab({ d, act }) {
         <div className="row"><input type="number" min={1} value={oneLimit} onChange={(e) => setOneLimit(e.target.value)} /><button onClick={() => act('setLimit', { username: target, limit: oneLimit }, `已更新 ${target} 的每日額度`)}>儲存</button></div>
       </div>
     </>
+  );
+}
+
+function SubjectPerm({ d, act }) {
+  const normal = d.users.filter((u) => u.role !== 'admin');
+  const all = d.config.subjects;
+  const [who, setWho] = useState('');
+  const [sel, setSel] = useState(null); // { username, list }
+  const target = who || normal[0]?.username;
+  const user = normal.find((u) => u.username === target);
+  if (!user) return null;
+  const list = sel && sel.username === target ? sel.list : (user.allowed_subjects?.length ? user.allowed_subjects : all);
+  const toggle = (s) => setSel({ username: target, list: list.includes(s) ? list.filter((x) => x !== s) : [...list, s] });
+  return (
+    <div className="card stack">
+      <h4>學生可詢問的科目</h4>
+      <div className="muted">只勾部分科目時,該學生只能選這些科目;問到其他科目的題目,畫面會顯示「請問○○相關的題目」。全部勾選 = 不限制。</div>
+      <select value={target} onChange={(e) => { setWho(e.target.value); setSel(null); }}>{normal.map((u) => <option key={u.username}>{u.username}</option>)}</select>
+      <div className="row wrapr">
+        {all.map((s) => (
+          <label key={s} className="inline"><input type="checkbox" checked={list.includes(s)} onChange={() => toggle(s)} />{s}</label>
+        ))}
+      </div>
+      <button disabled={!list.length} onClick={() => act('setSubjects', { username: target, subjects: list }, `已更新 ${target} 的可問科目`)}>儲存科目權限</button>
+    </div>
   );
 }
 
@@ -171,6 +198,7 @@ function ReviewItem({ log, act }) {
         <div><b>題目文字描述:</b><div style={{ whiteSpace: 'pre-wrap' }}>{log.note}</div></div>
         <div><b>AI 答案:</b>{log.ans}</div>
         <div><b>觀念推導:</b><Md>{log.reasoning}</Md></div>
+        {log.followups?.length > 0 && <div><b>學生追問({log.followups.length}/3):</b>{log.followups.map((f, i) => <div key={i} className="opt"><div><b>問:</b>{f.q}</div><Md>{f.a}</Md></div>)}</div>}
         {log.options_analysis?.map((o, i) => <div key={i}>{o.is_correct ? '✔' : '✘'} <b>{o.text || o.option}</b>:{o.explanation}</div>)}
         {log.image_count > 0 && (imgs
           ? <div className="grid3">{imgs.map((b, i) => <img key={i} alt="" src={`data:image/jpeg;base64,${b}`} style={{ width: '100%', borderRadius: 8 }} />)}</div>
