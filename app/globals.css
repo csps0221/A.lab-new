@@ -131,3 +131,20 @@ button.navbtn.on { background:color-mix(in srgb, var(--hl) 16%, transparent); co
 
 .fq { margin-top:10px; padding-top:10px; border-top:1px dashed var(--border); }
 .qbub { background:rgba(255,255,255,.06); border-radius:12px; padding:8px 12px; margin-bottom:6px; overflow-wrap:anywhere; }
+
+/* ===== 外觀主題選單(右上角) ===== */
+.hdr { position:relative; }
+.swatch-btn { position:relative; width:44px; height:44px; padding:0; flex:none; border-radius:12px; border:1.5px solid var(--border); }
+.swatch-dot { position:absolute; right:5px; bottom:5px; width:12px; height:12px; border-radius:50%; }
+.tp-overlay { position:fixed; inset:0; z-index:25; background:rgba(0,0,0,.4); }
+.tp-panel { position:absolute; top:calc(100% + 8px); right:0; width:min(440px,100%); z-index:30; padding:16px; }
+.tp-title { font-size:14px; font-weight:700; color:#94A3B8; margin-bottom:12px; }
+.tp-tabs { display:flex; gap:4px; padding:4px; border:1px solid var(--border); border-radius:16px; background:rgba(0,0,0,.28); margin-bottom:12px; }
+button.tp-tab { flex:1; background:transparent; color:#94A3B8; padding:12px 6px; border-radius:12px; font-size:16px; }
+button.tp-tab.on { background:rgba(148,163,184,.2); color:#C7D2FE; }
+.tp-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+button.tp-item { display:flex; align-items:center; gap:10px; background:rgba(51,65,110,.35); color:#fff; border:1.5px solid transparent; border-radius:16px; padding:10px; font-size:15px; text-align:left; }
+button.tp-item.on { border-color:var(--hl); }
+.tp-sw { width:42px; height:42px; border-radius:12px; border:1.5px solid; flex:none; }
+.tp-check { margin-left:auto; color:var(--hl); }
+button.navbtn svg { width:24px; height:24px; }

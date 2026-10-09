@@ -6,10 +6,15 @@ import Home from '@/components/Home';
 import Analysis from '@/components/Analysis';
 import History from '@/components/History';
 import Admin from '@/components/Admin';
+import ThemePicker from '@/components/ThemePicker';
+import { THEMES, DEFAULT_THEME, applyTheme } from '@/lib/themes';
 
-const THEMES = {
-  midnight_red: '深夜赤焰', quiet_blue: '靜謐深藍', forest_light: '森語晨光', aurora_blue: '極光藍境',
-  dark_gold: '墨夜流金', graphite_gray: '玄霧石墨',
+const Icon = ({ k }) => {
+  const p = { width: 24, height: 24, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true };
+  if (k === 'home') return <svg {...p}><path d="M3 11.5 12 4l9 7.5" /><path d="M5.5 10v9.5h13V10" /><path d="M10 19.5v-5h4v5" /></svg>;
+  if (k === 'analysis') return <svg {...p}><rect x="5" y="3.5" width="14" height="17" rx="3" /><path d="m9 12.5 2 2 4-4.5" /><path d="M9 7.5h6" /></svg>;
+  if (k === 'history') return <svg {...p}><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1" /><path d="M3.5 4.5v4h4" /><path d="M12 7.5V12l3 2" /></svg>;
+  return <svg {...p}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" /></svg>;
 };
 
 export default function Page() {
@@ -20,16 +25,16 @@ export default function Page() {
   const [solving, setSolving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [theme, setTheme] = useState('midnight_red');
+  const [theme, setTheme] = useState(DEFAULT_THEME);
 
   useEffect(() => {
     const t = localStorage.getItem('alab_theme');
-    if (t && THEMES[t]) { setTheme(t); document.documentElement.dataset.theme = t; }
+    if (t && THEMES.some((x) => x.id === t)) { setTheme(t); applyTheme(t); }
   }, []);
 
   function changeTheme(t) {
     setTheme(t);
-    document.documentElement.dataset.theme = t;
+    applyTheme(t);
     localStorage.setItem('alab_theme', t);
   }
 
@@ -68,7 +73,7 @@ export default function Page() {
     if (t === 'analysis' && !latest && !error && !solving) { setNotice('請先在首頁輸入或上傳題目並點擊「開始解題」!'); return; }
     go(t);
   };
-  const NAV = [['home', '🏠', '首頁'], ['analysis', '📝', '解析'], ['history', '🕘', '紀錄'], ...(isAdmin ? [['admin', '⚙️', '後台']] : [])];
+  const NAV = [['home', 'home', '首頁'], ['analysis', 'analysis', '解析'], ['history', 'history', '紀錄'], ...(isAdmin ? [['admin', 'admin', '後台']] : [])];
 
   return (
     <div className="wrap with-nav">
@@ -78,9 +83,7 @@ export default function Page() {
           <div className="title">A.lab | 解題實驗室</div>
           <div className="sub">Science Lab</div>
         </div>
-        <select className="theme-sel" value={theme} disabled={solving} onChange={(e) => changeTheme(e.target.value)} aria-label="外觀主題">
-          {Object.entries(THEMES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
+        <ThemePicker theme={theme} onChange={changeTheme} disabled={solving} />
         <button className="sec small" disabled={solving} onClick={logout}>登出</button>
       </header>
 
@@ -117,7 +120,7 @@ export default function Page() {
         <div className="navin">
           {NAV.map(([k, icon, label]) => (
             <button key={k} className={`navbtn ${tab === k ? 'on' : ''}`} disabled={solving} onClick={() => navTo(k)}>
-              <span aria-hidden="true" style={{ fontSize: 20 }}>{icon}</span>{label}
+              <Icon k={icon} />{label}
             </button>
           ))}
         </div>
