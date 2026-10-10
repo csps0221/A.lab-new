@@ -102,9 +102,9 @@ export default function Home({ subjects, remains, locked, onSolve }) {
 
         <div className="field-label">科目</div>
         {subjects.length === 0 && <div className="alert bad">管理員尚未開放任何科目給你,請聯絡管理員。</div>}
-        <div className="chips">
+        <div className="chips" role="radiogroup" aria-label="科目(一次選一個)">
           {subjects.map((sub, i) => (
-            <button key={sub} type="button" className={`chip ${(subject || subjects[0]) === sub ? 'on' : ''}`}
+            <button key={sub} type="button" role="radio" aria-checked={(subject || subjects[0]) === sub} className={`chip ${(subject || subjects[0]) === sub ? 'on' : ''}`}
               style={{ '--c': DOT_COLORS[i % DOT_COLORS.length] }} disabled={locked} onClick={() => setSubject(sub)}>
               <span className="dot" />{sub}
             </button>
