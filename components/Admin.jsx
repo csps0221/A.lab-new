@@ -46,6 +46,7 @@ export default function Admin() {
   const TABS = [
     ['users', '使用者', students],
     ['review', '點評紀錄', pending],
+    ['ann', '公告', d.announcements?.length || 0],
     ['subjects', '科目'],
     ['ai', 'AI 設定'],
     ['bugs', '回報', d.bugs.length],
@@ -75,6 +76,7 @@ export default function Admin() {
 
       {sub === 'users' && <UsersTab d={d} act={act} />}
       {sub === 'review' && <ReviewTab d={d} act={act} />}
+      {sub === 'ann' && <AnnTab d={d} act={act} />}
       {sub === 'subjects' && <SubjectsTab d={d} act={act} />}
       {sub === 'ai' && <AITab d={d} act={act} />}
       {sub === 'bugs' && <BugsTab d={d} />}
@@ -147,6 +149,7 @@ function UsersTab({ d, act }) {
 function UserCard({ u, subjects, act }) {
   const [open, setOpen] = useState(false);
   const [limit, setLimit] = useState(u.limit);
+  const [cls, setCls] = useState(u.class_name || '使用者');
   const [sel, setSel] = useState(u.allowed_subjects?.length ? u.allowed_subjects : subjects);
   const pct = Math.min(100, (u.used_today / (u.limit || 1)) * 100);
   const toggle = (s) => setSel((p) => (p.includes(s) ? p.filter((x) => x !== s) : [...p, s]));
@@ -168,6 +171,13 @@ function UserCard({ u, subjects, act }) {
 
       {open && (
         <div className="stack ucard-body">
+          <div>
+            <div className="field-label">身分類別(顯示在學生的資訊卡)</div>
+            <div className="row" style={{ marginTop: 6 }}>
+              <input value={cls} maxLength={20} onChange={(e) => setCls(e.target.value)} placeholder="例如:高二 3 班、化學資優班" />
+              <button style={{ flex: 'none' }} onClick={() => act('setProfile', { username: u.username, class_name: cls }, `已更新 ${u.username} 的資訊卡`)}>儲存</button>
+            </div>
+          </div>
           <div>
             <div className="field-label">每日解題額度</div>
             <div className="row" style={{ marginTop: 6 }}>
@@ -286,6 +296,50 @@ function ReviewItem({ log, act }) {
         <button onClick={() => act('review', { id: log.id, status, comment }, '點評已儲存')}>儲存點評</button>
       </div>
     </details>
+  );
+}
+
+/* ---------------- 公告 ---------------- */
+function AnnTab({ d, act }) {
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [pinned, setPinned] = useState(false);
+  const list = d.announcements || [];
+
+  async function publish() {
+    const ok = await act('addAnnouncement', { title, body, pinned }, '公告已發布');
+    if (ok) { setTitle(''); setBody(''); setPinned(false); }
+  }
+
+  return (
+    <div className="stack">
+      <div className="card stack">
+        <h4>發布新公告</h4>
+        <input value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} placeholder="公告標題" />
+        <textarea rows={5} maxLength={3000} value={body} onChange={(e) => setBody(e.target.value)} placeholder="公告內容(可換行)" />
+        <div className="row between">
+          <span>置頂這則公告</span>
+          <Toggle checked={pinned} onChange={setPinned} label="置頂" />
+        </div>
+        <button disabled={!title.trim() || !body.trim()} onClick={publish}>發布公告</button>
+      </div>
+
+      <div className="muted">已發布 {list.length} 則。學生在「我 → 實驗室公告」查看,有新公告時「我」會出現紅點。</div>
+      {list.map((a) => (
+        <div key={a.id} className="card">
+          <div className="row between" style={{ alignItems: 'flex-start' }}>
+            <b style={{ overflowWrap: 'anywhere' }}>{a.title}</b>
+            {a.pinned && <span className="tag ok" style={{ flex: 'none' }}>置頂</span>}
+          </div>
+          <div className="muted" style={{ margin: '2px 0 6px' }}>{a.time}</div>
+          <div style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{a.body}</div>
+          <div className="row" style={{ marginTop: 10 }}>
+            <button className="sec small" onClick={() => act('pinAnnouncement', { id: a.id, pinned: !a.pinned }, a.pinned ? '已取消置頂' : '已置頂')}>{a.pinned ? '取消置頂' : '置頂'}</button>
+            <button className="danger small" onClick={() => { if (confirm('確定要刪除這則公告嗎?')) act('deleteAnnouncement', { id: a.id }, '公告已刪除'); }}>刪除</button>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

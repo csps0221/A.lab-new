@@ -13,10 +13,10 @@ const clampLimit = (n) => Math.min(999999, Math.max(1, parseInt(n, 10) || 15));
 
 export async function GET() {
   if (!(await requireAdmin())) return err('存取被拒絕:沒有後台權限', 403);
-  const [users, config, history, bugs] = await Promise.all([
-    db.listUsers(), db.getConfig(), db.listHistory(), db.listBugs(),
+  const [users, config, history, bugs, announcements] = await Promise.all([
+    db.listUsers(), db.getConfig(), db.listHistory(), db.listBugs(), db.listAnnouncements(),
   ]);
-  return NextResponse.json({ users: users.map(db.publicUser), config, history, bugs });
+  return NextResponse.json({ users: users.map(db.publicUser), config, history, bugs, announcements });
 }
 
 export async function POST(req) {
@@ -61,6 +61,34 @@ export async function POST(req) {
       await db.putUser(u);
       break;
     }
+    case 'setProfile': {
+      const u = await db.getUser(b.username);
+      if (!u) return err('找不到帳號');
+      u.class_name = String(b.class_name || '').trim().slice(0, 20) || '使用者';
+      await db.putUser(u);
+      break;
+    }
+    case 'addAnnouncement': {
+      const title = String(b.title || '').trim().slice(0, 80);
+      const body = String(b.body || '').trim().slice(0, 3000);
+      if (!title) return err('請輸入公告標題');
+      if (!body) return err('請輸入公告內容');
+      await db.putAnnouncement({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        title, body, pinned: !!b.pinned, time: db.nowStr(),
+      });
+      break;
+    }
+    case 'pinAnnouncement': {
+      const a = await db.getAnnouncement(String(b.id || ''));
+      if (!a) return err('找不到這則公告');
+      a.pinned = !!b.pinned;
+      await db.putAnnouncement(a);
+      break;
+    }
+    case 'deleteAnnouncement':
+      await db.delAnnouncement(String(b.id || ''));
+      break;
     case 'setAllLimit': {
       const limit = clampLimit(b.limit);
       for (const u of await db.listUsers()) {

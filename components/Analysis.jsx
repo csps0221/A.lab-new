@@ -13,7 +13,7 @@ const STEPS = [
   [100, '正在整理最終答題報告...'],
 ];
 
-export default function Analysis({ loading, error, record, onHome, username, onUpdate }) {
+export default function Analysis({ loading, error, record, onHome, username, onUpdate, isFav, onFav }) {
   const [p, setP] = useState(5);
   useEffect(() => {
     if (!loading) return;
@@ -98,6 +98,9 @@ export default function Analysis({ loading, error, record, onHome, username, onU
         <div className="row">
           <span className="step lg">3</span>
           <div><b style={{ fontSize: 17 }}>解題解析</b><div className="muted">答案 → 觀念詳解 → 選項解析 → 追問</div></div>
+          {record && !loading && !error && onFav && (
+            <button type="button" className="sec small" style={{ marginLeft: 'auto', flex: 'none' }} aria-pressed={isFav} onClick={onFav}>{isFav ? '★ 已收藏' : '☆ 收藏'}</button>
+          )}
         </div>
         {body}
       </div>

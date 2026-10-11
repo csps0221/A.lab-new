@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Cropper from './Cropper';
 import { api } from '@/lib/client';
 
@@ -10,12 +10,13 @@ const DEPTHS = [
 ];
 const DOT_COLORS = ['#34D399', '#60A5FA', '#F5B93B', '#F87171', '#A78BFA', '#2DD4BF', '#FB923C', '#F472B6'];
 
-export default function Home({ subjects, remains, locked, onSolve }) {
+export default function Home({ subjects, remains, locked, onSolve, defaultDepth }) {
   const [text, setText] = useState('');
   const [files, setFiles] = useState([]);
   const [crops, setCrops] = useState({});
   const [editing, setEditing] = useState({});
   const [depth, setDepth] = useState('標準詳解');
+  useEffect(() => { if (defaultDepth) setDepth(defaultDepth); }, [defaultDepth]);
   const [subject, setSubject] = useState('');
   const [ref, setRef] = useState('');
   const [warn, setWarn] = useState('');
