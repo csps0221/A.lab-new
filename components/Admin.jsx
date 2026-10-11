@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/client';
 import Md from './Md';
 
-const GEMINI = ['gemini-3.1-pro', 'gemini-3.6-flash', 'gemini-2.5-pro', 'gemini-2.5-flash'];
+const GEMINI = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.1-pro'];
 const OPENAI = ['gpt-4o-mini', 'gpt-4o', 'o3-mini'];
 const STATUS = { pending: '待審核', correct: '回答正確', incorrect: '需補強' };
 const statusOf = (l) => l.admin_feedback?.status || 'pending';
