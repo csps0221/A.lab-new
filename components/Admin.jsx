@@ -50,8 +50,8 @@ export default function Admin() {
     ['users', '使用者', students],
     ['review', '點評紀錄', pending],
     ['ann', '公告', d.announcements?.length || 0],
-    ['subjects', '科目'],
-    ['ai', 'AI 設定'],
+    ['subjects', '科目', d.config.subjects.length],
+    ['ai', 'AI 設定', aiOn ? '正常' : '停用'],
     ['bugs', '回報', d.bugs.length],
   ];
 
@@ -69,10 +69,11 @@ export default function Admin() {
         <Stat n={aiOn ? '正常' : '停用'} l="AI 引擎" tone={aiOn ? 'ok' : 'bad'} />
       </div>
 
-      <div className="subtabs-scroll" role="tablist">
+      <div className="admin-tabs" role="tablist">
         {TABS.map(([k, name, n]) => (
-          <button key={k} role="tab" aria-selected={sub === k} className={sub === k ? '' : 'sec'} onClick={() => setSub(k)}>
-            {name}{n > 0 && <span className="cnt">{n}</span>}
+          <button key={k} role="tab" aria-selected={sub === k} className={`atab${sub === k ? ' on' : ''}`} onClick={() => setSub(k)}>
+            <span className="anum">{n}</span>
+            <span>{name}</span>
           </button>
         ))}
       </div>

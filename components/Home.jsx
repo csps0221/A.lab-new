@@ -101,7 +101,7 @@ export default function Home({ subjects, remains, locked, onSolve, defaultDepth 
       </div>
 
       {/* 2 設定題目資訊 */}
-      <div className="card stack">
+      <div className="card stack setcard">
         <div className="stephead" style={{ margin: 0 }}><span className="step">2</span>設定題目資訊</div>
 
         <div className="field-label">科目</div>
