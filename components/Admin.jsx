@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/client';
 import Md from './Md';
 
-const GEMINI = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.1-pro'];
+const GEMINI = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.1-pro'];
 const OPENAI = ['gpt-4o-mini', 'gpt-4o', 'o3-mini'];
 const STATUS = { pending: '待審核', correct: '回答正確', incorrect: '需補強' };
 const statusOf = (l) => l.admin_feedback?.status || 'pending';
@@ -24,8 +24,8 @@ export default function Admin() {
 
   const act = async (action, payload = {}, ok = '已完成') => {
     try {
-      await api('/api/admin', { method: 'POST', body: { action, ...payload } });
-      setToast({ text: ok });
+      const r = await api('/api/admin', { method: 'POST', body: { action, ...payload } });
+      setToast({ text: r.message || ok });
       await load();
       return true;
     } catch (e) {
@@ -37,10 +37,13 @@ export default function Admin() {
   if (loadErr) return <div className="alert bad">{loadErr}</div>;
   if (!d) return <div className="alert">載入中...</div>;
 
-  const reviewed = d.history.filter((l) => statusOf(l) !== 'pending');
-  const acc = reviewed.length ? (reviewed.filter((l) => statusOf(l) === 'correct').length / reviewed.length) * 100 : 0;
+  const st = d.stats || {};
+  const reviewedCount = st.correct != null ? st.correct + st.incorrect : d.history.filter((l) => statusOf(l) !== 'pending').length;
+  const correctCount = st.correct != null ? st.correct : d.history.filter((l) => statusOf(l) === 'correct').length;
+  const totalCount = st.total != null ? st.total : d.history.length;
+  const acc = reviewedCount ? (correctCount / reviewedCount) * 100 : 0;
   const aiOn = d.config.enable_gemini || d.config.enable_openai;
-  const pending = d.history.length - reviewed.length;
+  const pending = Math.max(0, totalCount - reviewedCount);
   const students = d.users.filter((u) => u.role !== 'admin').length;
 
   const TABS = [
@@ -61,8 +64,8 @@ export default function Admin() {
 
       <div className="admin-stats">
         <Stat n={d.users.length} l="註冊帳號" />
-        <Stat n={d.history.length} l="累積解題量" />
-        <Stat n={`${acc.toFixed(0)}%`} l={`正確率(${reviewed.length} 筆已審)`} />
+        <Stat n={totalCount} l="累積解題量" />
+        <Stat n={`${acc.toFixed(0)}%`} l={`正確率(${reviewedCount} 筆已審)`} />
         <Stat n={aiOn ? '正常' : '停用'} l="AI 引擎" tone={aiOn ? 'ok' : 'bad'} />
       </div>
 
@@ -79,7 +82,7 @@ export default function Admin() {
       {sub === 'ann' && <AnnTab d={d} act={act} />}
       {sub === 'subjects' && <SubjectsTab d={d} act={act} />}
       {sub === 'ai' && <AITab d={d} act={act} />}
-      {sub === 'bugs' && <BugsTab d={d} />}
+      {sub === 'bugs' && <BugsTab d={d} act={act} />}
 
       {toast && <div className={`toast ${toast.bad ? 'bad' : ''}`} role="status">{toast.text}</div>}
     </div>
@@ -231,6 +234,17 @@ function ReviewTab({ d, act }) {
         </select>
         <input value={q} onChange={(e) => { setQ(e.target.value); setN(20); }} placeholder="關鍵字:題目、答案、解析..." />
       </div>
+      <details className="card slim">
+        <summary>儲存空間與批量刪除</summary>
+        <div className="stack" style={{ marginTop: 10 }}>
+          <div className="muted">題目圖片只保留 30 天,之後自動刪除(文字紀錄不受影響)。第一次更新後,按下面按鈕整理一次舊圖片。</div>
+          <button className="sec" onClick={() => act('purgeOldImages', {}, '已整理完成')}>整理舊圖片(刪除超過 30 天的)</button>
+          <button className="danger" disabled={!logs.length}
+            onClick={() => { if (confirm(`確定要永久刪除目前篩選出的 ${logs.length} 筆解題紀錄嗎?\n(最多一次 300 筆,刪除後無法復原)`)) act('deleteRecords', { ids: logs.map((l) => l.id) }); }}>
+            刪除目前篩選結果({logs.length} 筆)
+          </button>
+        </div>
+      </details>
       <div className="muted">符合條件 {logs.length} 筆</div>
       {!logs.length && <div className="alert">沒有符合條件的紀錄。</div>}
       {logs.slice(0, n).map((l) => <ReviewItem key={l.id} log={l} act={act} />)}
@@ -246,10 +260,12 @@ function ReviewItem({ log, act }) {
   const [status, setStatus] = useState(fb.status);
   const [comment, setComment] = useState(fb.comment || '');
   const [imgs, setImgs] = useState(null);
+  const [full, setFull] = useState(null);
   const cur = statusOf(log);
+  const r = full || log; // 列表只有精簡內容,展開時才讀完整資料
 
   return (
-    <details className="card rv">
+    <details className="card rv" onToggle={(e) => { if (e.currentTarget.open && !full) api(`/api/history/${log.id}?full=1`).then((x) => setFull(x.record)).catch(() => {}); }}>
       <summary>
         <span className="rv-top">
           <b>{log.subject}</b><span className="muted">{log.user}</span>
@@ -260,25 +276,27 @@ function ReviewItem({ log, act }) {
 
       <div className="stack rv-body">
         <div className="muted">解說深度:{log.depth_mode} · 標準參考答案:{log.ref_answer}</div>
-        {log.note && log.note !== '無' && <Sec title="題目文字"><div style={{ whiteSpace: 'pre-wrap' }}>{log.note}</div></Sec>}
+        {r.note && r.note !== '無' && <Sec title="題目文字"><div style={{ whiteSpace: 'pre-wrap' }}>{r.note}</div></Sec>}
         {log.image_count > 0 && (
           <Sec title={`原圖(${log.image_count})`}>
             {imgs
-              ? <div className="grid3">{imgs.map((b, i) => <img key={i} alt="" src={`data:image/jpeg;base64,${b}`} style={{ width: '100%', borderRadius: 8 }} />)}</div>
+              ? (imgs.length
+                ? <div className="grid3">{imgs.map((b, i) => <img key={i} alt="" src={`data:image/jpeg;base64,${b}`} style={{ width: '100%', borderRadius: 8 }} />)}</div>
+                : <div className="muted">原圖已超過 30 天,已自動刪除。</div>)
               : <button className="sec small" onClick={async () => setImgs((await api(`/api/history/${log.id}`)).images)}>載入原圖</button>}
           </Sec>
         )}
-        <Sec title={`AI 答案:${log.ans}`}><Md>{log.reasoning}</Md></Sec>
-        {log.options_analysis?.length > 0 && (
+        <Sec title={`AI 答案:${log.ans}`}>{full ? <Md>{r.reasoning}</Md> : <div className="muted">載入完整內容中...</div>}</Sec>
+        {r.options_analysis?.length > 0 && (
           <Sec title="選項解析">
-            <div className="stack">{log.options_analysis.map((o, i) => (
+            <div className="stack">{r.options_analysis.map((o, i) => (
               <div key={i} className={`opt ${o.is_correct ? 'ok' : 'bad'}`}><b>{o.is_correct ? '✔' : '✘'} {o.text || o.option}</b><Md>{o.explanation}</Md></div>
             ))}</div>
           </Sec>
         )}
-        {log.followups?.length > 0 && (
-          <Sec title={`學生追問(${log.followups.length}/3)`}>
-            <div className="stack">{log.followups.map((f, i) => (
+        {r.followups?.length > 0 && (
+          <Sec title={`學生追問(${r.followups.length}/3)`}>
+            <div className="stack">{r.followups.map((f, i) => (
               <div key={i} className="opt"><div><b>問:</b>{f.q}</div><Md>{f.a}</Md></div>
             ))}</div>
           </Sec>
@@ -294,6 +312,7 @@ function ReviewItem({ log, act }) {
         </Sec>
         <textarea rows={3} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="給學生的觀念補充、錯誤更正或學習建議..." />
         <button onClick={() => act('review', { id: log.id, status, comment }, '點評已儲存')}>儲存點評</button>
+        <button className="danger" onClick={() => { if (confirm('確定要永久刪除這筆解題紀錄嗎?(含圖片、追問,無法復原)')) act('deleteRecords', { ids: [log.id] }); }}>刪除這筆紀錄</button>
       </div>
     </details>
   );
@@ -419,14 +438,21 @@ function AITab({ d, act }) {
 }
 
 /* ---------------- Bug 回報 ---------------- */
-function BugsTab({ d }) {
+function BugsTab({ d, act }) {
   return (
     <div className="stack">
       {!d.bugs.length && <div className="alert">目前沒有任何問題回報。</div>}
+      {d.bugs.length > 0 && (
+        <div className="row between">
+          <span className="muted">共 {d.bugs.length} 則</span>
+          <button className="danger small" onClick={() => { if (confirm(`確定要刪除全部 ${d.bugs.length} 則回報嗎?`)) act('clearBugs', {}, '已清除全部回報'); }}>全部清除</button>
+        </div>
+      )}
       {d.bugs.map((b, i) => (
-        <div key={i} className="card">
+        <div key={`${b.time}-${i}`} className="card">
           <div className="row between"><b>{b.user}</b><small className="muted">{b.time}</small></div>
           <div style={{ marginTop: 6, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{b.message}</div>
+          <button className="danger small" style={{ marginTop: 10 }} onClick={() => act('deleteBug', { time: b.time, user: b.user, message: b.message }, '已刪除這則回報')}>刪除</button>
         </div>
       ))}
     </div>

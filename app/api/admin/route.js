@@ -141,6 +141,25 @@ export async function POST(req) {
       await Promise.all([db.updateRecord(rec), db.adjustStats(oldStatus, b.status)]);
       break;
     }
+    case 'deleteRecords': {
+      const ids = (Array.isArray(b.ids) ? b.ids : []).map(String).slice(0, 300);
+      let n = 0;
+      for (let i = 0; i < ids.length; i += 10) {
+        const res = await Promise.all(ids.slice(i, i + 10).map((id) => db.deleteRecord(id)));
+        n += res.filter(Boolean).length;
+      }
+      return NextResponse.json({ ok: true, message: `已刪除 ${n} 筆解題紀錄` });
+    }
+    case 'purgeOldImages': {
+      const r = await db.purgeOldImages();
+      return NextResponse.json({ ok: true, message: `已刪除 ${r.deleted} 張超過 30 天的圖片;其餘 ${r.kept} 張會在 30 天後自動刪除` });
+    }
+    case 'deleteBug':
+      if (!(await db.deleteBug({ time: b.time, user: b.user, message: b.message }))) return err('找不到這則回報,可能已被刪除');
+      break;
+    case 'clearBugs':
+      await db.clearBugs();
+      break;
     default:
       return err('未知的操作');
   }

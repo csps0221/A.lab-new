@@ -117,6 +117,14 @@ export default function Page() {
     try { await api('/api/announcements', { method: 'POST', body: { ids } }); } catch {}
   }
 
+  async function openRecord(l) {
+    setError('');
+    let rec = l;
+    try { rec = (await api(`/api/history/${l.id}?full=1`)).record; } catch {}
+    setLatest(rec);
+    go('analysis');
+  }
+
   async function logout() {
     await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
     setMe(null); setLatest(null); setTab('home');
@@ -181,11 +189,11 @@ export default function Page() {
       <div style={{ marginTop: 12 }}>
         {tab === 'analysis' && <Analysis loading={solving} error={error} record={latest} onHome={() => go('home')} username={me.username} onUpdate={setLatest}
           isFav={!!latest && favIds.includes(latest.id)} onFav={latest && latest.user === me.username ? toggleFav : null} />}
-        {tab === 'history' && <History onOpen={(r) => { setError(''); setLatest(r); go('analysis'); }} />}
+        {tab === 'history' && <History onOpen={openRecord} />}
         {tab === 'me' && (
           <Me me={me} remains={remains} pct={pct} theme={theme} onTheme={changeTheme} prefs={prefs} setPrefs={setPrefs}
             anns={anns} unread={unread} markSeen={markSeen} favIds={favIds} onGo={go}
-            onOpenRecord={(r) => { setError(''); setLatest(r); go('analysis'); }}
+            onOpenRecord={openRecord}
             canInstall={!!installEvt}
             onInstall={async () => { installEvt.prompt(); await installEvt.userChoice; setInstallEvt(null); }}
             onLogout={logout} />
