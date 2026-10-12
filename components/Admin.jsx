@@ -356,30 +356,44 @@ function AnnTab({ d, act }) {
 
 function AnnItem({ a, act, todayStr }) {
   const [end, setEnd] = useState(a.ends || '');
+  const [busy, setBusy] = useState(false);
   const expired = a.ends && a.ends < todayStr;
+  const changed = end !== (a.ends || '');
+
+  // 資料重新載入後(例如按「重新整理」),輸入框要跟著伺服器的值更新
+  useEffect(() => { setEnd(a.ends || ''); }, [a.ends]);
+
+  async function saveEnd(value) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const ok = await act('setAnnouncementEnd', { id: a.id, ends: value }, value ? `已改為顯示到 ${value}` : '已改為不限期');
+      if (ok) setEnd(value);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <div>
-      {[a].map((a) => (
-        <div key={a.id} className="card">
-          <div className="row between" style={{ alignItems: 'flex-start' }}>
-            <b style={{ overflowWrap: 'anywhere' }}>{a.title}</b>
-            <span style={{ flex: 'none' }}>
-              {a.pinned && <span className="tag ok">置頂</span>}
-              {expired && <span className="tag bad">已過期</span>}
-            </span>
-          </div>
-          <div className="muted" style={{ margin: '2px 0 6px' }}>{a.time} · {a.ends ? `顯示到 ${a.ends}` : '不限期'}</div>
-          <div style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{a.body}</div>
-          <div className="row" style={{ marginTop: 10 }}>
-            <input type="date" value={end} min={todayStr} onChange={(e) => setEnd(e.target.value)} aria-label="公告截止日" style={{ flex: 1 }} />
-            <button className="sec small" onClick={() => act('setAnnouncementEnd', { id: a.id, ends: end }, end ? `已改為顯示到 ${end}` : '已改為不限期')}>儲存日期</button>
-          </div>
-          <div className="row" style={{ marginTop: 8 }}>
-            <button className="sec small" onClick={() => act('pinAnnouncement', { id: a.id, pinned: !a.pinned }, a.pinned ? '已取消置頂' : '已置頂')}>{a.pinned ? '取消置頂' : '置頂'}</button>
-            <button className="danger small" onClick={() => { if (confirm('確定要刪除這則公告嗎?')) act('deleteAnnouncement', { id: a.id }, '公告已刪除'); }}>刪除</button>
-          </div>
-        </div>
-      ))}
+    <div className="card">
+      <div className="row between" style={{ alignItems: 'flex-start' }}>
+        <b style={{ overflowWrap: 'anywhere' }}>{a.title}</b>
+        <span style={{ flex: 'none' }}>
+          {a.pinned && <span className="tag ok">置頂</span>}
+          {expired && <span className="tag bad">已過期</span>}
+        </span>
+      </div>
+      <div className="muted" style={{ margin: '2px 0 6px' }}>{a.time} · {a.ends ? `顯示到 ${a.ends}` : '不限期'}</div>
+      <div style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{a.body}</div>
+      <div className="row" style={{ marginTop: 10 }}>
+        <input type="date" value={end} min={todayStr} onChange={(e) => setEnd(e.target.value)} aria-label="公告截止日" style={{ flex: 1, minWidth: 0 }} />
+        <button className="sec small" disabled={busy || !changed} onClick={() => saveEnd(end)}>儲存日期</button>
+        {a.ends && <button className="sec small" disabled={busy} onClick={() => saveEnd('')}>改為不限期</button>}
+      </div>
+      <div className="row" style={{ marginTop: 8 }}>
+        <button className="sec small" onClick={() => act('pinAnnouncement', { id: a.id, pinned: !a.pinned }, a.pinned ? '已取消置頂' : '已置頂')}>{a.pinned ? '取消置頂' : '置頂'}</button>
+        <button className="danger small" onClick={() => { if (confirm('確定要刪除這則公告嗎?')) act('deleteAnnouncement', { id: a.id }, '公告已刪除'); }}>刪除</button>
+      </div>
     </div>
   );
 }
