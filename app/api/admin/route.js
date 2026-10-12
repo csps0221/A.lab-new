@@ -13,10 +13,10 @@ const clampLimit = (n) => Math.min(999999, Math.max(1, parseInt(n, 10) || 15));
 
 export async function GET() {
   if (!(await requireAdmin())) return err('存取被拒絕:沒有後台權限', 403);
-  const [users, config, history, bugs, announcements] = await Promise.all([
-    db.listUsers(), db.getConfig(), db.listHistory(), db.listBugs(), db.listAnnouncements(),
+  const [users, config, history, bugs, announcements, stats] = await Promise.all([
+    db.listUsers(), db.getConfig(), db.listHistoryAll(300), db.listBugs(), db.listAnnouncements(), db.getStats(),
   ]);
-  return NextResponse.json({ users: users.map(db.publicUser), config, history, bugs, announcements });
+  return NextResponse.json({ users: users.map(db.publicUser), config, history: history.map(db.lightRecord), bugs, announcements, stats });
 }
 
 export async function POST(req) {
@@ -73,9 +73,11 @@ export async function POST(req) {
       const body = String(b.body || '').trim().slice(0, 3000);
       if (!title) return err('請輸入公告標題');
       if (!body) return err('請輸入公告內容');
+      const ends = /^\d{4}-\d{2}-\d{2}$/.test(String(b.ends || '')) ? String(b.ends) : '';
+      if (ends && ends < db.today()) return err('公告截止日不能早於今天');
       await db.putAnnouncement({
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        title, body, pinned: !!b.pinned, time: db.nowStr(),
+        title, body, pinned: !!b.pinned, ends, time: db.nowStr(),
       });
       break;
     }
@@ -83,6 +85,15 @@ export async function POST(req) {
       const a = await db.getAnnouncement(String(b.id || ''));
       if (!a) return err('找不到這則公告');
       a.pinned = !!b.pinned;
+      await db.putAnnouncement(a);
+      break;
+    }
+    case 'setAnnouncementEnd': {
+      const a = await db.getAnnouncement(String(b.id || ''));
+      if (!a) return err('找不到這則公告');
+      const ends = /^\d{4}-\d{2}-\d{2}$/.test(String(b.ends || '')) ? String(b.ends) : '';
+      if (ends && ends < db.today()) return err('公告截止日不能早於今天');
+      a.ends = ends;
       await db.putAnnouncement(a);
       break;
     }
@@ -125,8 +136,9 @@ export async function POST(req) {
       const rec = await db.getRecord(b.id);
       if (!rec) return err('找不到紀錄');
       if (!['pending', 'correct', 'incorrect'].includes(b.status)) return err('狀態不正確');
+      const oldStatus = rec.admin_feedback?.status || 'pending';
       rec.admin_feedback = { status: b.status, comment: String(b.comment || '').slice(0, 2000) };
-      await db.updateRecord(rec);
+      await Promise.all([db.updateRecord(rec), db.adjustStats(oldStatus, b.status)]);
       break;
     }
     default:

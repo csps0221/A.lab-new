@@ -134,7 +134,7 @@ function Announcements({ anns }) {
             <b style={{ fontSize: 17, overflowWrap: 'anywhere' }}>{a.title}</b>
             {a.pinned && <span className="tag ok" style={{ flex: 'none' }}>置頂</span>}
           </div>
-          <div className="muted" style={{ margin: '2px 0 8px' }}>{a.time}</div>
+          <div className="muted" style={{ margin: '2px 0 8px' }}>{a.time}{a.ends ? ` · 顯示到 ${a.ends}` : ''}</div>
           <div style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', lineHeight: 1.7 }}>{a.body}</div>
         </div>
       ))}

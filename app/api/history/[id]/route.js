@@ -4,7 +4,7 @@ import * as db from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(_req, { params }) {
+export async function GET(req, { params }) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: '請先登入' }, { status: 401 });
   const rec = await db.getRecord(params.id);
@@ -12,5 +12,6 @@ export async function GET(_req, { params }) {
   if (user.role !== 'admin' && rec.user !== user.username) {
     return NextResponse.json({ error: '無權限' }, { status: 403 });
   }
+  if (new URL(req.url).searchParams.get('full')) return NextResponse.json({ record: rec });
   return NextResponse.json({ images: await db.getImages(rec.id, rec.image_count || 0) });
 }

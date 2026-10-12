@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth';
 import * as db from '@/lib/db';
-import { ocrImages, solve, friendlyError } from '@/lib/ai';
+import { solve, friendlyError } from '@/lib/ai';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 const err = (m, s = 400) => NextResponse.json({ error: m }, { status: s });
 
 export async function POST(req) {
-  const user = await getSessionUser();
+  const [user, cfg] = await Promise.all([getSessionUser(), db.getConfig()]);
   if (!user) return err('請先登入', 401);
 
   const b = await req.json().catch(() => ({}));
@@ -17,7 +17,6 @@ export async function POST(req) {
   const images = (Array.isArray(b.images) ? b.images : []).filter((s) => typeof s === 'string').slice(0, 5);
   if (!text && !images.length) return err('請輸入文字題目或上傳題目圖片!');
 
-  const cfg = await db.getConfig();
   const allowed = db.allowedSubjects(user, cfg);
   if (!allowed.length) return err('管理員尚未開放任何科目給你,請聯絡管理員。', 403);
   const offTopicMsg = `請問${allowed.join('、')}相關的題目`;
@@ -32,22 +31,11 @@ export async function POST(req) {
     return err('今日解題額度已用完,請明日再試!', 429);
   }
 
-  let ocr = '';
-  if (images.length) {
-    try {
-      ocr = await ocrImages(images, text, subject, cfg);
-    } catch (e) {
-      if (!text) return err(friendlyError(e), 502); // 沒有文字可用時,辨識失敗就直接回報,不要拿空內容去解題
-      ocr = '[圖片辨識失敗,以下僅依文字內容解題]';
-    }
-  }
-  let question = '';
-  if (text) question += `使用者文字題目/補充:\n${text}\n\n`;
-  if (ocr) question += `圖片題目辨識內容:\n${ocr}`;
-
+  // 圖片直接和題目一起送給 AI(不再先辨識再解題,速度約快一倍)
+  const question = text ? `使用者文字題目/補充:\n${text}` : '(題目在附圖中,請依圖片作答)';
   let result;
   try {
-    result = await solve(question, subject, depth, cfg, restricted ? allowed : null);
+    result = await solve(question, subject, depth, cfg, restricted ? allowed : null, images);
   } catch (e) {
     return err(friendlyError(e), 502);
   }
@@ -62,13 +50,14 @@ export async function POST(req) {
     depth_mode: depth,
     ref_answer: refAnswer || '無',
     note: text || '無',
-    ...result,
-    question: question.slice(0, 6000),
+    ans: result.ans,
+    reasoning: result.reasoning,
+    options_analysis: result.options_analysis,
+    question: [text && `使用者文字題目/補充:\n${text}`, result.question_text && `圖片題目內容:\n${result.question_text}`].filter(Boolean).join('\n\n').slice(0, 6000),
     followups: [],
     image_count: images.length,
     admin_feedback: { status: 'pending', comment: '' },
   };
-  await db.saveRecord(record, images);
-  await db.incrementUsage(user.username); // 成功才扣額度
+  await Promise.all([db.saveRecord(record, images), db.incrementUsage(user.username)]); // 成功才扣額度
   return NextResponse.json(record);
 }

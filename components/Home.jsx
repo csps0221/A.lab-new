@@ -1,7 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
-import Cropper from './Cropper';
+import dynamic from 'next/dynamic';
 import { api } from '@/lib/client';
+
+// 圖片裁切元件只在選了圖片後才載入
+const Cropper = dynamic(() => import('./Cropper'), { ssr: false });
 
 const DEPTHS = [
   ['精簡解答', '直接給答案與關鍵重點,快速核對。'],

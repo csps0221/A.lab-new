@@ -1,13 +1,15 @@
 'use client';
 import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { api } from '@/lib/client';
 import Login from '@/components/Login';
 import Home from '@/components/Home';
-import Analysis from '@/components/Analysis';
-import History from '@/components/History';
-import Admin from '@/components/Admin';
-import Me from '@/components/Me';
+const Analysis = dynamic(() => import('@/components/Analysis'), { ssr: false, loading: () => <div className="muted">載入中...</div> });
+const History = dynamic(() => import('@/components/History'), { ssr: false, loading: () => <div className="muted">載入中...</div> });
+const Admin = dynamic(() => import('@/components/Admin'), { ssr: false, loading: () => <div className="muted">載入中...</div> });
+const Me = dynamic(() => import('@/components/Me'), { ssr: false, loading: () => <div className="muted">載入中...</div> });
 import ThemePicker from '@/components/ThemePicker';
+import AnnouncementModal from '@/components/AnnouncementModal';
 import { THEMES, DEFAULT_THEME, applyTheme } from '@/lib/themes';
 
 const Icon = ({ k }) => {
@@ -84,14 +86,36 @@ export default function Page() {
     localStorage.setItem('alab_theme', t);
   }
 
-  async function refresh() {
+  async function refresh(quiet = false) {
     try {
       const d = await api('/api/me');
-      setMe(d.user); setSubjects(d.subjects);
-      loadAnns();
-    } catch { setMe(null); }
+      setMe(d.user); setSubjects(d.subjects); setAnns(d.announcements || []);
+    } catch { if (!quiet) setMe(null); }
   }
   useEffect(() => { refresh(); }, []);
+
+  // 進站後在背景預先載入其他頁面,切換時不用再等;並定期檢查有沒有新公告
+  const uname = me?.username;
+  useEffect(() => {
+    if (!uname) return;
+    const pre = setTimeout(() => { import('@/components/Analysis'); import('@/components/History'); import('@/components/Me'); }, 1500);
+    const tick = () => { if (document.visibilityState === 'visible') refresh(true); };
+    const iv = setInterval(tick, 180000);
+    document.addEventListener('visibilitychange', tick);
+    return () => { clearTimeout(pre); clearInterval(iv); document.removeEventListener('visibilitychange', tick); };
+  }, [uname]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 公告:沒按過「了解」,或按了超過 3 天,就彈出
+  const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;
+  const ackMap = me?.ann_ack || {};
+  const pendingAnns = anns.filter((a) => !(ackMap[a.id] && Date.now() - ackMap[a.id] < THREE_DAYS));
+  async function ackAnns() {
+    const ids = pendingAnns.map((a) => a.id);
+    const now = Date.now();
+    setMe((m) => ({ ...m, ann_ack: { ...(m.ann_ack || {}), ...Object.fromEntries(ids.map((id) => [id, now])) } }));
+    markSeen();
+    try { await api('/api/announcements', { method: 'POST', body: { ids } }); } catch {}
+  }
 
   async function logout() {
     await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
@@ -168,6 +192,8 @@ export default function Page() {
         )}
         {tab === 'admin' && isAdmin && <Admin />}
       </div>
+
+      {!solving && <AnnouncementModal items={pendingAnns} onAck={ackAnns} />}
 
       <footer className="foot">
         <b>SCIENCE LAB</b>

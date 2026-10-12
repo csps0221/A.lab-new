@@ -304,11 +304,13 @@ function AnnTab({ d, act }) {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [pinned, setPinned] = useState(false);
+  const [ends, setEnds] = useState('');
   const list = d.announcements || [];
+  const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
 
   async function publish() {
-    const ok = await act('addAnnouncement', { title, body, pinned }, '公告已發布');
-    if (ok) { setTitle(''); setBody(''); setPinned(false); }
+    const ok = await act('addAnnouncement', { title, body, pinned, ends }, '公告已發布');
+    if (ok) { setTitle(''); setBody(''); setPinned(false); setEnds(''); }
   }
 
   return (
@@ -317,6 +319,9 @@ function AnnTab({ d, act }) {
         <h4>發布新公告</h4>
         <input value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} placeholder="公告標題" />
         <textarea rows={5} maxLength={3000} value={body} onChange={(e) => setBody(e.target.value)} placeholder="公告內容(可換行)" />
+        <label>公告顯示到哪一天(選填,留空 = 不限期)
+          <input type="date" min={todayStr} value={ends} onChange={(e) => setEnds(e.target.value)} />
+        </label>
         <div className="row between">
           <span>置頂這則公告</span>
           <Toggle checked={pinned} onChange={setPinned} label="置頂" />
@@ -324,16 +329,33 @@ function AnnTab({ d, act }) {
         <button disabled={!title.trim() || !body.trim()} onClick={publish}>發布公告</button>
       </div>
 
-      <div className="muted">已發布 {list.length} 則。學生在「我 → 實驗室公告」查看,有新公告時「我」會出現紅點。</div>
-      {list.map((a) => (
+      <div className="muted">已發布 {list.length} 則。學生進站會自動彈出公告,按「了解」後 3 天內不再出現;超過截止日的公告會自動隱藏。</div>
+      {list.map((a) => <AnnItem key={a.id} a={a} act={act} todayStr={todayStr} />)}
+    </div>
+  );
+}
+
+function AnnItem({ a, act, todayStr }) {
+  const [end, setEnd] = useState(a.ends || '');
+  const expired = a.ends && a.ends < todayStr;
+  return (
+    <div>
+      {[a].map((a) => (
         <div key={a.id} className="card">
           <div className="row between" style={{ alignItems: 'flex-start' }}>
             <b style={{ overflowWrap: 'anywhere' }}>{a.title}</b>
-            {a.pinned && <span className="tag ok" style={{ flex: 'none' }}>置頂</span>}
+            <span style={{ flex: 'none' }}>
+              {a.pinned && <span className="tag ok">置頂</span>}
+              {expired && <span className="tag bad">已過期</span>}
+            </span>
           </div>
-          <div className="muted" style={{ margin: '2px 0 6px' }}>{a.time}</div>
+          <div className="muted" style={{ margin: '2px 0 6px' }}>{a.time} · {a.ends ? `顯示到 ${a.ends}` : '不限期'}</div>
           <div style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{a.body}</div>
           <div className="row" style={{ marginTop: 10 }}>
+            <input type="date" value={end} min={todayStr} onChange={(e) => setEnd(e.target.value)} aria-label="公告截止日" style={{ flex: 1 }} />
+            <button className="sec small" onClick={() => act('setAnnouncementEnd', { id: a.id, ends: end }, end ? `已改為顯示到 ${end}` : '已改為不限期')}>儲存日期</button>
+          </div>
+          <div className="row" style={{ marginTop: 8 }}>
             <button className="sec small" onClick={() => act('pinAnnouncement', { id: a.id, pinned: !a.pinned }, a.pinned ? '已取消置頂' : '已置頂')}>{a.pinned ? '取消置頂' : '置頂'}</button>
             <button className="danger small" onClick={() => { if (confirm('確定要刪除這則公告嗎?')) act('deleteAnnouncement', { id: a.id }, '公告已刪除'); }}>刪除</button>
           </div>
