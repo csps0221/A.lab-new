@@ -11,7 +11,7 @@ const DEPTHS = [
   ['標準詳解', '用少量步驟說清楚主要解法。'],
   ['深度解析', '完整推導,並補充易錯點與延伸觀念。'],
 ];
-const DOT_COLORS = ['#34D399', '#60A5FA', '#F5B93B', '#F87171', '#A78BFA', '#2DD4BF', '#FB923C', '#F472B6'];
+const DOT_COLORS = ['#8FBF9F', '#8EA6D6', '#C9A24E', '#D98C8C', '#A99BD6', '#7FBFB5', '#CC9A6A', '#C98DB2']; // 低彩度、不刺眼
 
 export default function Home({ subjects, remains, locked, onSolve, defaultDepth }) {
   const [text, setText] = useState('');
