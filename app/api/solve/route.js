@@ -40,7 +40,7 @@ export async function POST(req) {
     return err(friendlyError(e), 502);
   }
 
-  if (result.off_topic) return err(subject === '其他' ? offTopicMsg : `這題不屬於「${subject}」,請改問${subject}相關的題目,或切換到正確的科目。`, 422); // 不扣額度、不存紀錄
+  if (result.off_topic) return err(offTopicMsg, 422); // 不扣額度、不存紀錄
 
   const record = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,

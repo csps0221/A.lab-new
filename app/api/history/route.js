@@ -17,8 +17,7 @@ export async function GET(req) {
   }
 
   const q = (params.get('q') || '').toLowerCase();
-  // 「我的解題紀錄」只顯示自己解的題目(管理員要看全部學生的紀錄,請到後台)
-  let logs = await db.listHistoryFor(user.username, 300);
+  let logs = user.role === 'admin' ? await db.listHistoryAll(300) : await db.listHistoryFor(user.username, 300);
   if (q) logs = logs.filter((l) => JSON.stringify(l).toLowerCase().includes(q));
   return NextResponse.json({ logs: logs.slice(0, 100).map(db.lightRecord) });
 }

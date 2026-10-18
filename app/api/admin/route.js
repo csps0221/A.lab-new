@@ -100,6 +100,20 @@ export async function POST(req) {
     case 'deleteAnnouncement':
       await db.delAnnouncement(String(b.id || ''));
       break;
+    case 'setLabLimit': {
+      const u = await db.getUser(b.username);
+      if (!u) return err('找不到帳號');
+      u.lab_limit = clampLimit(b.limit);
+      await db.putUser(u);
+      break;
+    }
+    case 'setAllLabLimit': {
+      const limit = clampLimit(b.limit);
+      for (const u of await db.listUsers()) {
+        if (u.role !== 'admin') await db.putUser({ ...u, lab_limit: limit });
+      }
+      break;
+    }
     case 'setAllLimit': {
       const limit = clampLimit(b.limit);
       for (const u of await db.listUsers()) {
