@@ -48,7 +48,7 @@ export default function Analysis({ loading, error, record, onHome, username, onU
         <div className="answer">
           <div className="eyebrow">CORRECT ANSWER</div>
           <div className="row" style={{ marginTop: 6 }}>
-            <span className="check">✓</span><b className="ans">{record.ans}</b>
+            <span className="check">✓</span><b className="ans"><Md inline>{record.ans}</Md></b>
             {fb.status === 'correct' && <span className="tag ok">管理員審核:正確</span>}
             {fb.status === 'incorrect' && <span className="tag bad">管理員審核:需再加強</span>}
           </div>

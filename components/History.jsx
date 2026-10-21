@@ -1,4 +1,5 @@
 'use client';
+import Md from './Md';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/client';
 
@@ -32,7 +33,7 @@ export default function History({ onOpen }) {
               </b>
               <small className="muted">{l.time}</small>
             </div>
-            <div style={{ marginTop: 3 }}>答案:{l.ans}</div>
+            <div style={{ marginTop: 3 }}>答案:<Md inline>{l.ans}</Md></div>
             <div className="muted clamp">{l.note && l.note !== '無' ? l.note : l.reasoning}</div>
             {l.image_count > 0 && <small className="muted">附圖 {l.image_count} 張</small>}
           </div>
