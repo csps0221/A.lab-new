@@ -128,6 +128,19 @@ button.sec { background:rgba(30,41,75,.7); }
 .navin { width:100%; max-width:760px; display:flex; gap:6px; background:var(--card); border:1px solid var(--border); border-radius:22px; padding:6px; box-shadow:0 -4px 20px rgba(0,0,0,.45); }
 button.navbtn { flex:1; background:transparent; color:#94A3B8; display:flex; flex-direction:column; align-items:center; gap:2px; font-size:13px; padding:8px 4px; border-radius:16px; }
 button.navbtn.on { background:color-mix(in srgb, var(--hl) 16%, transparent); color:var(--hl); }
+/* ===== 底部工具列:點擊動畫 ===== */
+button.navbtn { transition:background-color .25s ease, color .25s ease, transform .15s cubic-bezier(.3,.7,.4,1); -webkit-tap-highlight-color:transparent; overflow:hidden; }
+button.navbtn:active:not(:disabled) { transform:scale(.88); }
+button.navbtn svg { transition:transform .25s ease; }
+button.navbtn:active:not(:disabled) svg { transform:scale(.85); }
+button.navbtn.on svg { animation:navpop .5s cubic-bezier(.3,1.6,.5,1); }
+button.navbtn.on { animation:navpill .3s ease-out; }
+button.navbtn::after { content:''; position:absolute; left:50%; top:40%; width:10px; height:10px; margin:-5px 0 0 -5px; border-radius:50%; background:var(--hl); opacity:0; pointer-events:none; }
+button.navbtn:active:not(:disabled)::after { animation:navripple .45s ease-out; }
+@keyframes navpop { 0% { transform:scale(.7) translateY(4px); } 55% { transform:scale(1.25) translateY(-4px); } 100% { transform:scale(1) translateY(0); } }
+@keyframes navpill { from { background-color:transparent; } }
+@keyframes navripple { from { opacity:.35; transform:scale(1); } to { opacity:0; transform:scale(9); } }
+@media (prefers-reduced-motion: reduce) { button.navbtn, button.navbtn svg, button.navbtn::after { animation:none !important; } }
 
 .fq { margin-top:10px; padding-top:10px; border-top:1px dashed var(--border); }
 .qbub { background:rgba(255,255,255,.06); border-radius:12px; padding:8px 12px; margin-bottom:6px; overflow-wrap:anywhere; }

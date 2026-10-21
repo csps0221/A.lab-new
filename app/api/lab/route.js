@@ -60,7 +60,7 @@ export async function POST(req) {
     return err('這個對話已經問很多次了,請開一個新對話。', 429);
   }
 
-  const history = [...(chat ? chat.messages.slice(-10) : []), { role: 'user', text }].map(({ role, text: t }) => ({ role, text: t }));
+  const history = [...(chat ? chat.messages.slice(-6) : []), { role: 'user', text }].map(({ role, text: t }) => ({ role, text: t }));
   let reply;
   try {
     reply = await labReply(subject, history, cfg);
