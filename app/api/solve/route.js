@@ -12,6 +12,9 @@ export async function POST(req) {
   const [user, cfg] = await Promise.all([getSessionUser(), db.getConfig()]);
   if (!user) return err('請先登入', 401);
 
+  const lm = db.lockRemaining(user);
+  if (lm) return err(db.lockMessage(lm), 423);
+
   const b = await req.json().catch(() => ({}));
   const text = String(b.text || '').trim();
   const images = (Array.isArray(b.images) ? b.images : []).filter((s) => typeof s === 'string').slice(0, 5);
@@ -40,7 +43,12 @@ export async function POST(req) {
     return err(friendlyError(e), 502);
   }
 
-  if (result.off_topic) return err(offTopicMsg, 422); // 不扣額度、不存紀錄
+  if (result.off_topic) { // 不存紀錄;第 1 次偏題不扣額度,第 2 次起扣 1 次,連續 3 次鎖定
+    const r = await db.recordOffTopic(user.username, 'solve');
+    if (r.locked) return err(db.lockMessage(db.LOCK_MS), 423);
+    const note = r.charged ? '已扣 1 次額度' : '這次不扣額度';
+    return err(`${offTopicMsg}(連續偏題 ${r.strikes}/${db.LOCK_STRIKES} 次,${note};滿 ${db.LOCK_STRIKES} 次將鎖定 24 小時)`, 422);
+  }
 
   const record = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,

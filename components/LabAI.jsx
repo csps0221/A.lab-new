@@ -17,7 +17,6 @@ export default function LabAI({ me, subjects, onBack, onUsed }) {
   useEffect(() => { setUsed(me.lab_used_today || 0); }, [me.lab_used_today]);
   const remain = isAdmin ? '無限' : Math.max(0, limit - used);
 
-  const [subject, setSubject] = useState('');
   const [chat, setChat] = useState(null);       // { id, subject, title, messages }
   const [pending, setPending] = useState(null); // 正在送出的問題(先顯示在畫面上)
   const [text, setText] = useState('');
@@ -29,17 +28,16 @@ export default function LabAI({ me, subjects, onBack, onUsed }) {
 
   const messages = chat?.messages || [];
   const started = messages.length > 0 || !!pending;
-  const curSubject = chat ? chat.subject : (subject || subjects[0] || '');
   const noQuota = remain === 0;
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [messages.length, pending, sending, view]);
 
   async function send() {
     const q = text.trim();
-    if (!q || sending || noQuota || !curSubject) return;
+    if (!q || sending || noQuota) return;
     setErr(''); setSending(true); setPending(q); setText('');
     try {
-      const r = await api('/api/lab', { method: 'POST', body: { id: chat?.id, subject: curSubject, text: q } });
+      const r = await api('/api/lab', { method: 'POST', body: { id: chat?.id, text: q } });
       setChat(r.chat); setUsed(r.lab_used); onUsed?.();
     } catch (e) { setErr(e.message); setText(q); }
     finally { setPending(null); setSending(false); }
@@ -73,13 +71,7 @@ export default function LabAI({ me, subjects, onBack, onUsed }) {
       </div>
 
       <div className="lab-chips">
-        <div className="lab-chiprow" role="radiogroup" aria-label="提問科目">
-          {subjects.map((s) => (
-            <button key={s} type="button" role="radio" aria-checked={curSubject === s}
-              className={`lab-chip ${curSubject === s ? 'on' : ''}`} disabled={started && curSubject !== s || sending}
-              onClick={() => setSubject(s)}>{s}</button>
-          ))}
-        </div>
+        <span className="muted" style={{ flex: 1, fontSize: 13 }}>可以問任何學科相關的問題</span>
         <span className="lab-quota">今日 <b>{remain}</b>{!isAdmin && <> / {limit}</>}</span>
       </div>
 
@@ -103,7 +95,7 @@ export default function LabAI({ me, subjects, onBack, onUsed }) {
             <div className="lab-eyebrow">LAB AI 課業助教</div>
             <div className="lab-h1">把卡住的觀念,<br />一起弄懂</div>
             <div className="lab-steps">
-              <span><i>1</i> 選科目</span><span aria-hidden="true">→</span><span><i>2</i> 問觀念、公式</span>
+              <span><i>1</i> 直接輸入問題</span><span aria-hidden="true">→</span><span><i>2</i> 問任何學科的觀念、公式</span>
             </div>
           </div>
         ) : (

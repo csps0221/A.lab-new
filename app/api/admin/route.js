@@ -100,6 +100,10 @@ export async function POST(req) {
     case 'deleteAnnouncement':
       await db.delAnnouncement(String(b.id || ''));
       break;
+    case 'unlockUser': {
+      if (!(await db.unlockUser(String(b.username || '')))) return err('找不到帳號');
+      break;
+    }
     case 'setLabLimit': {
       const u = await db.getUser(b.username);
       if (!u) return err('找不到帳號');

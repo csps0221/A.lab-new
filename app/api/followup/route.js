@@ -12,6 +12,9 @@ export async function POST(req) {
   const user = await getSessionUser();
   if (!user) return err('請先登入', 401);
 
+  const lm = db.lockRemaining(user);
+  if (lm) return err(db.lockMessage(lm), 423);
+
   const { id, question } = await req.json().catch(() => ({}));
   const q = String(question || '').trim().slice(0, 500);
   if (!q) return err('請輸入追問內容');

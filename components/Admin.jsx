@@ -213,6 +213,7 @@ function UserCard({ u, subjects, act }) {
           <small className="muted">{u.class_name} · 今日 {u.used_today}/{u.limit} 題 · LAB AI {u.lab_used_today || 0}/{u.lab_limit}</small>
           <span className="bar thin"><i style={{ width: `${pct}%` }} /></span>
         </span>
+        {u.lock_remaining > 0 && <span className="tag" style={{ color: '#f87171' }}>🔒 已鎖定</span>}
         {u.first_login && <span className="tag">待改密碼</span>}
         <span aria-hidden="true">{open ? '▴' : '▾'}</span>
       </button>
@@ -220,6 +221,12 @@ function UserCard({ u, subjects, act }) {
 
       {open && (
         <div className="stack ucard-body">
+          {u.lock_remaining > 0 && (
+            <div className="row" style={{ alignItems: 'center' }}>
+              <small className="muted" style={{ flex: 1 }}>🔒 連續 3 次問非所選科目的問題,剩餘約 {Math.ceil(u.lock_remaining / 3600000)} 小時自動解鎖</small>
+              <button style={{ flex: 'none' }} onClick={() => act('unlockUser', { username: u.username }, `已解鎖 ${u.username}`)}>提早解鎖</button>
+            </div>
+          )}
           <div>
             <div className="field-label">身分類別(顯示在學生的資訊卡)</div>
             <div className="row" style={{ marginTop: 6 }}>

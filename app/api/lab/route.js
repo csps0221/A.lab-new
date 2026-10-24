@@ -35,22 +35,20 @@ export async function POST(req) {
   const [user, cfg] = await Promise.all([getSessionUser(), db.getConfig()]);
   if (!user) return err('請先登入', 401);
 
+  const lm = db.lockRemaining(user);
+  if (lm) return err(db.lockMessage(lm), 423);
+
   const b = await req.json().catch(() => ({}));
   const text = String(b.text || '').trim().slice(0, MAX_LEN);
   if (!text) return err('請輸入問題');
   if (!cfg.enable_gemini && !cfg.enable_openai) return err('管理員目前已關閉 AI 服務。', 503);
 
-  // 科目權限:和「解題」相同,只能問管理員開放給你的科目
-  const allowed = db.allowedSubjects(user, cfg);
-  if (!allowed.length) return err('管理員尚未開放任何科目給你,請聯絡管理員。', 403);
-
+  // LAB AI 不需選科目:可問任何學科相關的問題(非學科問題才算偏題)
   let chat = null;
   if (b.id) {
     chat = await db.getChat(String(b.id));
     if (!chat || chat.user !== user.username) return err('找不到這個對話,請開新對話。', 404);
   }
-  const subject = chat ? chat.subject : String(b.subject || allowed[0]);
-  if (!allowed.includes(subject)) return err(`請問${allowed.join('、')}相關的題目`, 403);
 
   // LAB AI 有自己的每日次數(管理員可在後台調整)
   const limit = user.lab_limit ?? db.DEFAULT_LAB_LIMIT;
@@ -63,15 +61,20 @@ export async function POST(req) {
   const history = [...(chat ? chat.messages.slice(-6) : []), { role: 'user', text }].map(({ role, text: t }) => ({ role, text: t }));
   let reply;
   try {
-    reply = await labReply(subject, history, cfg);
+    reply = await labReply(history, cfg);
   } catch (e) {
     return err(friendlyError(e), 502);
   }
-  if (reply.includes('[[OFF_TOPIC]]')) return err(`請問${subject}相關的題目`, 422); // 不扣次數、不存紀錄
+  if (reply.includes('[[OFF_TOPIC]]')) { // 不存紀錄;第 1 次偏題不扣次數,第 2 次起扣 1 次,連續 3 次鎖定
+    const r = await db.recordOffTopic(user.username, 'lab');
+    if (r.locked) return err(db.lockMessage(db.LOCK_MS), 423);
+    const note = r.charged ? '已扣 1 次次數' : '這次不扣次數';
+    return err(`請問學科相關的問題就好(連續偏題 ${r.strikes}/${db.LOCK_STRIKES} 次,${note};滿 ${db.LOCK_STRIKES} 次將鎖定 24 小時)`, 422);
+  }
 
   const now = db.nowStr();
   if (!chat) {
-    chat = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, user: user.username, subject, title: text.slice(0, 24), created: now, messages: [] };
+    chat = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, user: user.username, subject: '不限科目', title: text.slice(0, 24), created: now, messages: [] };
   }
   chat.messages.push({ role: 'user', text, time: now }, { role: 'ai', text: reply, time: now });
   chat.updated = now;
