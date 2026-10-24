@@ -68,8 +68,7 @@ export async function POST(req) {
   if (reply.includes('[[OFF_TOPIC]]')) { // 不存紀錄;第 1 次偏題不扣次數,第 2 次起扣 1 次,連續 3 次鎖定
     const r = await db.recordOffTopic(user.username, 'lab');
     if (r.locked) return err(db.lockMessage(db.LOCK_MS), 423);
-    const note = r.charged ? '已扣 1 次次數' : '這次不扣次數';
-    return err(`請問學科相關的問題就好(連續偏題 ${r.strikes}/${db.LOCK_STRIKES} 次,${note};滿 ${db.LOCK_STRIKES} 次將鎖定 24 小時)`, 422);
+    return err('請問學科相關的問題', 422);
   }
 
   const now = db.nowStr();

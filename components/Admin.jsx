@@ -223,7 +223,7 @@ function UserCard({ u, subjects, act }) {
         <div className="stack ucard-body">
           {u.lock_remaining > 0 && (
             <div className="row" style={{ alignItems: 'center' }}>
-              <small className="muted" style={{ flex: 1 }}>🔒 連續 3 次問非所選科目的問題,剩餘約 {Math.ceil(u.lock_remaining / 3600000)} 小時自動解鎖</small>
+              <small className="muted" style={{ flex: 1 }}>🔒 累計 3 次偏題,剩餘約 {Math.ceil(u.lock_remaining / 3600000)} 小時自動解鎖</small>
               <button style={{ flex: 'none' }} onClick={() => act('unlockUser', { username: u.username }, `已解鎖 ${u.username}`)}>提早解鎖</button>
             </div>
           )}
