@@ -202,7 +202,7 @@ export default function Page() {
             onLogout={logout} />
         )}
         {tab === 'lab' && <LabAI me={me} subjects={subjects} onBack={() => go('home')} onUsed={() => refresh(true)} />}
-        {tab === 'admin' && isAdmin && <Admin />}
+        {tab === 'admin' && isAdmin && <Admin onBack={() => go('me')} />}
       </div>
 
       {!solving && <AnnouncementModal items={pendingAnns} onAck={ackAnns} />}

@@ -18,6 +18,8 @@ const isRealDate = (s) => {
   return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;
 };
 const dateProblem = (v, min) => (!v ? '' : !isRealDate(v) ? '請輸入完整日期,例如 2026-10-31' : v < min ? '日期不能早於今天' : '');
+const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
+const todayTW = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
 
 // 不使用瀏覽器內建的日期選擇器(部分手機無法輸入):直接打數字會自動加上「-」,也可以點快速選項
 function DateField({ value, onChange, min }) {
@@ -33,7 +35,7 @@ function DateField({ value, onChange, min }) {
     <div className="stack" style={{ gap: 8 }}>
       <input inputMode="numeric" value={value} maxLength={10} placeholder="例如 2026-10-31(留空 = 不限期)" aria-invalid={!!bad}
         onChange={(e) => onChange(fmt(e.target.value))} />
-      {bad && <div style={{ color: '#F87171', fontSize: 13 }}>{bad}</div>}
+      {bad && <div style={{ color: '#D98A8A', fontSize: 13 }}>{bad}</div>}
       <div className="tags" style={{ marginTop: 0 }}>
         {[['3 天後', 3], ['7 天後', 7], ['14 天後', 14], ['30 天後', 30]].map(([l, n]) => (
           <button key={n} type="button" className="tchip" onClick={() => onChange(addDays(min, n))}>{l}</button>
@@ -47,7 +49,7 @@ function DateField({ value, onChange, min }) {
 const STATUS = { pending: '待審核', correct: '回答正確', incorrect: '需補強' };
 const statusOf = (l) => l.admin_feedback?.status || 'pending';
 
-export default function Admin() {
+export default function Admin({ onBack }) {
   const [d, setD] = useState(null);
   const [loadErr, setLoadErr] = useState('');
   const [sub, setSub] = useState('users');
@@ -61,10 +63,15 @@ export default function Admin() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const act = async (action, payload = {}, ok = '已完成') => {
+  // 依序送出一個或多個操作,全部完成後只重新讀取一次
+  const run = async (list, ok = '已完成') => {
     try {
-      const r = await api('/api/admin', { method: 'POST', body: { action, ...payload } });
-      setToast({ text: r.message || ok });
+      let msg;
+      for (const body of list) {
+        const r = await api('/api/admin', { method: 'POST', body });
+        msg = r.message || msg;
+      }
+      setToast({ text: list.length === 1 && msg ? msg : ok });
       await load();
       return true;
     } catch (e) {
@@ -72,6 +79,7 @@ export default function Admin() {
       return false;
     }
   };
+  const act = (action, payload = {}, ok = '已完成') => run([{ action, ...payload }], ok);
 
   if (loadErr) return <div className="alert bad">{loadErr}</div>;
   if (!d) return <div className="alert">載入中...</div>;
@@ -83,10 +91,12 @@ export default function Admin() {
   const acc = reviewedCount ? (correctCount / reviewedCount) * 100 : 0;
   const aiOn = d.config.enable_gemini || d.config.enable_openai;
   const pending = Math.max(0, totalCount - reviewedCount);
-  const students = d.users.filter((u) => u.role !== 'admin').length;
+  const students = d.users.filter((u) => u.role !== 'admin');
+  const usedToday = students.reduce((s, u) => s + (u.used_today || 0), 0);
+  const labToday = students.reduce((s, u) => s + (u.lab_used_today || 0), 0);
 
   const TABS = [
-    ['users', '使用者', students],
+    ['users', '使用者', students.length],
     ['review', '點評紀錄', pending],
     ['ann', '公告', d.announcements?.length || 0],
     ['subjects', '科目'],
@@ -95,28 +105,34 @@ export default function Admin() {
   ];
 
   return (
-    <div className="stack">
-      <div className="row between">
-        <h3>A.lab 後台管理</h3>
+    <div className="stack admin-root">
+      <div className="admin-head">
+        <div className="row" style={{ gap: 10, minWidth: 0 }}>
+          {onBack && <button type="button" className="sec small back-s" onClick={onBack} aria-label="返回">←</button>}
+          <div style={{ minWidth: 0 }}>
+            <h3>後台管理</h3>
+            <span className={`ai-pill ${aiOn ? 'ok' : 'bad'}`}>● AI {aiOn ? '正常' : '已停用'}</span>
+          </div>
+        </div>
         <button className="sec small" onClick={() => load().then(() => setToast({ text: '已更新資料' }))}>重新整理</button>
       </div>
 
       <div className="admin-stats">
-        <Stat n={d.users.length} l="註冊帳號" />
-        <Stat n={totalCount} l="累積解題量" />
+        <Stat n={students.length} l="學生帳號" />
+        <Stat n={totalCount} l="累積解題" />
+        <Stat n={`${usedToday} · ${labToday}`} l="今日 解題 · LAB AI" />
         <Stat n={`${acc.toFixed(0)}%`} l={`正確率(${reviewedCount} 筆已審)`} />
-        <Stat n={aiOn ? '正常' : '停用'} l="AI 引擎" tone={aiOn ? 'ok' : 'bad'} />
       </div>
 
-      <div className="subtabs-scroll" role="tablist">
+      <div className="atabs" role="tablist">
         {TABS.map(([k, name, n]) => (
-          <button key={k} role="tab" aria-selected={sub === k} className={sub === k ? '' : 'sec'} onClick={() => setSub(k)}>
+          <button key={k} role="tab" aria-selected={sub === k} className={`atab ${sub === k ? 'on' : ''}`} onClick={() => setSub(k)}>
             {name}{n > 0 && <span className="cnt">{n}</span>}
           </button>
         ))}
       </div>
 
-      {sub === 'users' && <UsersTab d={d} act={act} />}
+      {sub === 'users' && <UsersTab d={d} act={act} run={run} />}
       {sub === 'review' && <ReviewTab d={d} act={act} />}
       {sub === 'ann' && <AnnTab d={d} act={act} />}
       {sub === 'subjects' && <SubjectsTab d={d} act={act} />}
@@ -128,8 +144,8 @@ export default function Admin() {
   );
 }
 
-const Stat = ({ n, l, tone }) => (
-  <div className="stat"><div className={`num ${tone || ''}`}>{n}</div><div className="muted">{l}</div></div>
+const Stat = ({ n, l }) => (
+  <div className="stat"><div className="num">{n}</div><div className="muted">{l}</div></div>
 );
 
 const Toggle = ({ checked, onChange, label }) => (
@@ -137,7 +153,7 @@ const Toggle = ({ checked, onChange, label }) => (
 );
 
 /* ---------------- 使用者 ---------------- */
-function UsersTab({ d, act }) {
+function UsersTab({ d, act, run }) {
   const [q, setQ] = useState('');
   const [adding, setAdding] = useState(false);
   const [nu, setNu] = useState('');
@@ -165,9 +181,9 @@ function UsersTab({ d, act }) {
         <div className="card stack">
           <h4>新增學生帳號</h4>
           <input value={nu} onChange={(e) => setNu(e.target.value)} placeholder="帳號,例如:張小明" />
-          <div className="grid2e">
-            <label>預設密碼<input value={np} onChange={(e) => setNp(e.target.value)} /></label>
-            <label>每日額度(題)<input type="number" min={1} value={nl} onChange={(e) => setNl(e.target.value)} /></label>
+          <div className="field-grid">
+            <label className="fld"><span className="field-label">預設密碼</span><input value={np} onChange={(e) => setNp(e.target.value)} /></label>
+            <label className="fld"><span className="field-label">每日解題額度</span><input type="number" min={1} value={nl} onChange={(e) => setNl(e.target.value)} /></label>
           </div>
           <div className="muted">學生第一次登入時,會被要求改密碼。</div>
           <button disabled={!nu.trim()} onClick={add}>建立帳號</button>
@@ -175,91 +191,115 @@ function UsersTab({ d, act }) {
       )}
 
       <details className="card slim">
-        <summary>批量設定每日額度(全體學生)</summary>
-        <div className="row" style={{ marginTop: 10 }}>
-          <input type="number" min={1} value={all} onChange={(e) => setAll(e.target.value)} aria-label="每日額度" />
-          <button style={{ flex: 'none' }} onClick={() => act('setAllLimit', { limit: all }, `已將全體學生的每日額度調為 ${all} 題`)}>套用至全體</button>
-        </div>
-        <div className="field-label" style={{ marginTop: 12 }}>LAB AI 每日提問次數(全體學生)</div>
-        <div className="row" style={{ marginTop: 6 }}>
-          <input type="number" min={1} value={labAll} onChange={(e) => setLabAll(e.target.value)} aria-label="LAB AI 每日次數" />
-          <button style={{ flex: 'none' }} onClick={() => act('setAllLabLimit', { limit: labAll }, `已將全體學生的 LAB AI 次數調為 ${labAll} 次`)}>套用至全體</button>
+        <summary>批量設定額度(全體學生)</summary>
+        <div className="field-grid" style={{ marginTop: 12 }}>
+          <div className="fld">
+            <span className="field-label">每日解題額度</span>
+            <div className="row">
+              <input type="number" min={1} value={all} onChange={(e) => setAll(e.target.value)} aria-label="每日解題額度" />
+              <button style={{ flex: 'none' }} onClick={() => act('setAllLimit', { limit: all }, `已將全體學生的每日額度調為 ${all} 題`)}>套用</button>
+            </div>
+          </div>
+          <div className="fld">
+            <span className="field-label">LAB AI 每日次數</span>
+            <div className="row">
+              <input type="number" min={1} value={labAll} onChange={(e) => setLabAll(e.target.value)} aria-label="LAB AI 每日次數" />
+              <button style={{ flex: 'none' }} onClick={() => act('setAllLabLimit', { limit: labAll }, `已將全體學生的 LAB AI 次數調為 ${labAll} 次`)}>套用</button>
+            </div>
+          </div>
         </div>
       </details>
 
-      <div className="muted">共 {list.length} 位學生{q && '(符合搜尋)'}。點學生可調整額度、科目或刪除。</div>
-      {list.map((u) => <UserCard key={u.username} u={u} subjects={d.config.subjects} act={act} />)}
+      <div className="muted">共 {list.length} 位學生{q && '(符合搜尋)'} · 點開學生可調整額度、科目或刪除</div>
+      <div className="alist">
+        {list.map((u) => <UserCard key={u.username} u={u} subjects={d.config.subjects} act={act} run={run} />)}
+      </div>
       {!normal.length && <div className="alert">還沒有學生帳號,按右上角「＋ 新增」建立。</div>}
     </div>
   );
 }
 
-function UserCard({ u, subjects, act }) {
+function UserCard({ u, subjects, act, run }) {
+  const init = {
+    cls: u.class_name || '使用者',
+    limit: String(u.limit),
+    lab: String(u.lab_limit ?? 10),
+    sel: u.allowed_subjects?.length ? u.allowed_subjects : subjects,
+  };
   const [open, setOpen] = useState(false);
-  const [limit, setLimit] = useState(u.limit);
-  const [cls, setCls] = useState(u.class_name || '使用者');
-  const [labLimit, setLabLimit] = useState(u.lab_limit ?? 10);
-  const [sel, setSel] = useState(u.allowed_subjects?.length ? u.allowed_subjects : subjects);
+  const [cls, setCls] = useState(init.cls);
+  const [limit, setLimit] = useState(init.limit);
+  const [labLimit, setLabLimit] = useState(init.lab);
+  const [sel, setSel] = useState(init.sel);
   const pct = Math.min(100, (u.used_today / (u.limit || 1)) * 100);
   const toggle = (s) => setSel((p) => (p.includes(s) ? p.filter((x) => x !== s) : [...p, s]));
   const shown = u.allowed_subjects?.length ? u.allowed_subjects : ['全部科目'];
+  const dirty = cls !== init.cls || String(limit) !== init.limit || String(labLimit) !== init.lab || !sameSet(sel, init.sel);
+
+  function save() {
+    const actions = [];
+    if (cls !== init.cls) actions.push({ action: 'setProfile', username: u.username, class_name: cls });
+    if (String(limit) !== init.limit) actions.push({ action: 'setLimit', username: u.username, limit });
+    if (String(labLimit) !== init.lab) actions.push({ action: 'setLabLimit', username: u.username, limit: labLimit });
+    if (!sameSet(sel, init.sel)) actions.push({ action: 'setSubjects', username: u.username, subjects: sel });
+    if (actions.length) run(actions, `已儲存 ${u.username} 的設定`);
+  }
 
   return (
     <div className="card ucard">
       <button type="button" className="ucard-head" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <span className="avatar sm">{u.username[0]}</span>
         <span className="ucard-main">
-          <b>{u.username}</b>
-          <small className="muted">{u.class_name} · 今日 {u.used_today}/{u.limit} 題 · LAB AI {u.lab_used_today || 0}/{u.lab_limit}</small>
+          <span className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+            <b>{u.username}</b>
+            {u.lock_remaining > 0 && <span className="tag bad">已鎖定</span>}
+            {u.first_login && <span className="tag">待改密碼</span>}
+          </span>
+          <small className="muted">{u.class_name} · 解題 {u.used_today}/{u.limit} · LAB AI {u.lab_used_today || 0}/{u.lab_limit}</small>
           <span className="bar thin"><i style={{ width: `${pct}%` }} /></span>
         </span>
-        {u.lock_remaining > 0 && <span className="tag" style={{ color: '#f87171' }}>🔒 已鎖定</span>}
-        {u.first_login && <span className="tag">待改密碼</span>}
-        <span aria-hidden="true">{open ? '▴' : '▾'}</span>
+        <span aria-hidden="true" className="chev">{open ? '▴' : '▾'}</span>
       </button>
       <div className="tags">{shown.map((s) => <span key={s} className="tag">{s}</span>)}</div>
 
       {open && (
         <div className="stack ucard-body">
           {u.lock_remaining > 0 && (
-            <div className="row" style={{ alignItems: 'center' }}>
-              <small className="muted" style={{ flex: 1 }}>🔒 累計 3 次偏題,剩餘約 {Math.ceil(u.lock_remaining / 3600000)} 小時自動解鎖</small>
-              <button style={{ flex: 'none' }} onClick={() => act('unlockUser', { username: u.username }, `已解鎖 ${u.username}`)}>提早解鎖</button>
+            <div className="alert row" style={{ alignItems: 'center' }}>
+              <small style={{ flex: 1 }}>累計 3 次偏題,剩餘約 {Math.ceil(u.lock_remaining / 3600000)} 小時自動解鎖</small>
+              <button className="small" style={{ flex: 'none' }} onClick={() => act('unlockUser', { username: u.username }, `已解鎖 ${u.username}`)}>提早解鎖</button>
             </div>
           )}
-          <div>
-            <div className="field-label">身分類別(顯示在學生的資訊卡)</div>
-            <div className="row" style={{ marginTop: 6 }}>
+
+          <div className="field-grid">
+            <label className="fld wide">
+              <span className="field-label">身分類別(顯示在學生的資訊卡)</span>
               <input value={cls} maxLength={20} onChange={(e) => setCls(e.target.value)} placeholder="例如:高二 3 班、化學資優班" />
-              <button style={{ flex: 'none' }} onClick={() => act('setProfile', { username: u.username, class_name: cls }, `已更新 ${u.username} 的資訊卡`)}>儲存</button>
-            </div>
-          </div>
-          <div>
-            <div className="field-label">每日解題額度</div>
-            <div className="row" style={{ marginTop: 6 }}>
+            </label>
+            <label className="fld">
+              <span className="field-label">每日解題額度</span>
               <input type="number" min={1} value={limit} onChange={(e) => setLimit(e.target.value)} />
-              <button style={{ flex: 'none' }} onClick={() => act('setLimit', { username: u.username, limit }, `已更新 ${u.username} 的每日額度`)}>儲存</button>
-            </div>
-          </div>
-          <div>
-            <div className="field-label">LAB AI 每日提問次數(和解題額度分開計算)</div>
-            <div className="row" style={{ marginTop: 6 }}>
+            </label>
+            <label className="fld">
+              <span className="field-label">LAB AI 每日次數</span>
               <input type="number" min={1} value={labLimit} onChange={(e) => setLabLimit(e.target.value)} />
-              <button style={{ flex: 'none' }} onClick={() => act('setLabLimit', { username: u.username, limit: labLimit }, `已更新 ${u.username} 的 LAB AI 次數`)}>儲存</button>
-            </div>
+            </label>
           </div>
+
           <div>
             <div className="field-label">可詢問的科目</div>
-            <div className="muted" style={{ margin: '4px 0 8px' }}>只勾部分科目時,問到其他科目會顯示「請問○○相關的題目」。全部勾選 = 不限制。</div>
+            <div className="muted" style={{ margin: '3px 0 8px' }}>只勾部分科目時,問到其他科目會顯示「請問○○相關的題目」。全部勾選 = 不限制。</div>
             <div className="tags" style={{ marginTop: 0 }}>
               {subjects.map((s) => (
                 <button key={s} type="button" className={`tchip ${sel.includes(s) ? 'on' : ''}`} aria-pressed={sel.includes(s)} onClick={() => toggle(s)}>{s}</button>
               ))}
             </div>
-            <button style={{ marginTop: 10, width: '100%' }} disabled={!sel.length}
-              onClick={() => act('setSubjects', { username: u.username, subjects: sel }, `已更新 ${u.username} 的可問科目`)}>儲存科目權限</button>
           </div>
-          <button className="danger" onClick={() => { if (confirm(`確定要刪除帳號「${u.username}」嗎?`)) act('deleteUser', { username: u.username }, `已刪除帳號:${u.username}`); }}>刪除這個帳號</button>
+
+          <div className="row">
+            <button style={{ flex: 1 }} disabled={!dirty || !sel.length} onClick={save}>{dirty ? '儲存變更' : '沒有變更'}</button>
+            <button className="danger" style={{ flex: 'none' }} onClick={() => { if (confirm(`確定要刪除帳號「${u.username}」嗎?`)) act('deleteUser', { username: u.username }, `已刪除帳號:${u.username}`); }}>刪除帳號</button>
+          </div>
         </div>
       )}
     </div>
@@ -294,17 +334,21 @@ function ReviewTab({ d, act }) {
         </select>
         <input value={q} onChange={(e) => { setQ(e.target.value); setN(20); }} placeholder="關鍵字:題目、答案、解析..." />
       </div>
+
       <details className="card slim">
         <summary>儲存空間與批量刪除</summary>
         <div className="stack" style={{ marginTop: 10 }}>
           <div className="muted">題目圖片只保留 30 天,之後自動刪除(文字紀錄不受影響)。第一次更新後,按下面按鈕整理一次舊圖片。</div>
-          <button className="sec" onClick={() => act('purgeOldImages', {}, '已整理完成')}>整理舊圖片(刪除超過 30 天的)</button>
-          <button className="danger" disabled={!logs.length}
-            onClick={() => { if (confirm(`確定要永久刪除目前篩選出的 ${logs.length} 筆解題紀錄嗎?\n(最多一次 300 筆,刪除後無法復原)`)) act('deleteRecords', { ids: logs.map((l) => l.id) }); }}>
-            刪除目前篩選結果({logs.length} 筆)
-          </button>
+          <div className="row wrapr">
+            <button className="sec" onClick={() => act('purgeOldImages', {}, '已整理完成')}>整理舊圖片(超過 30 天)</button>
+            <button className="danger" disabled={!logs.length}
+              onClick={() => { if (confirm(`確定要永久刪除目前篩選出的 ${logs.length} 筆解題紀錄嗎?\n(最多一次 300 筆,刪除後無法復原)`)) act('deleteRecords', { ids: logs.map((l) => l.id) }); }}>
+              刪除目前篩選結果({logs.length})
+            </button>
+          </div>
         </div>
       </details>
+
       <div className="muted">符合條件 {logs.length} 筆</div>
       {!logs.length && <div className="alert">沒有符合條件的紀錄。</div>}
       {logs.slice(0, n).map((l) => <ReviewItem key={l.id} log={l} act={act} />)}
@@ -328,8 +372,9 @@ function ReviewItem({ log, act }) {
     <details className="card rv" onToggle={(e) => { if (e.currentTarget.open && !full) api(`/api/history/${log.id}?full=1`).then((x) => setFull(x.record)).catch(() => {}); }}>
       <summary>
         <span className="rv-top">
+          <span className={`rv-dot ${cur}`} aria-hidden="true" />
           <b>{log.subject}</b><span className="muted">{log.user}</span>
-          <span className={`tag ${cur === 'correct' ? 'ok' : cur === 'incorrect' ? 'bad' : ''}`}>{STATUS[cur]}</span>
+          <span className={`tag rv-tag ${cur === 'correct' ? 'ok' : cur === 'incorrect' ? 'bad' : ''}`}>{STATUS[cur]}</span>
         </span>
         <span className="rv-sub muted">{log.time} · AI 答案:{log.ans}</span>
       </summary>
@@ -362,17 +407,20 @@ function ReviewItem({ log, act }) {
           </Sec>
         )}
 
-        <hr style={{ margin: '4px 0' }} />
-        <Sec title="管理員點評(計入正確率)">
-          <div className="seg">
-            {Object.entries(STATUS).map(([k, v]) => (
-              <button key={k} type="button" className={status === k ? 'on' : ''} onClick={() => setStatus(k)}>{v}</button>
-            ))}
+        <div className="rv-review stack">
+          <Sec title="管理員點評(計入正確率)">
+            <div className="seg">
+              {Object.entries(STATUS).map(([k, v]) => (
+                <button key={k} type="button" className={status === k ? 'on' : ''} onClick={() => setStatus(k)}>{v}</button>
+              ))}
+            </div>
+          </Sec>
+          <textarea rows={3} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="給學生的觀念補充、錯誤更正或學習建議..." />
+          <div className="row">
+            <button style={{ flex: 1 }} onClick={() => act('review', { id: log.id, status, comment }, '點評已儲存')}>儲存點評</button>
+            <button className="danger" style={{ flex: 'none' }} onClick={() => { if (confirm('確定要永久刪除這筆解題紀錄嗎?(含圖片、追問,無法復原)')) act('deleteRecords', { ids: [log.id] }); }}>刪除紀錄</button>
           </div>
-        </Sec>
-        <textarea rows={3} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="給學生的觀念補充、錯誤更正或學習建議..." />
-        <button onClick={() => act('review', { id: log.id, status, comment }, '點評已儲存')}>儲存點評</button>
-        <button className="danger" onClick={() => { if (confirm('確定要永久刪除這筆解題紀錄嗎?(含圖片、追問,無法復原)')) act('deleteRecords', { ids: [log.id] }); }}>刪除這筆紀錄</button>
+        </div>
       </div>
     </details>
   );
@@ -380,69 +428,82 @@ function ReviewItem({ log, act }) {
 
 /* ---------------- 公告 ---------------- */
 function AnnTab({ d, act }) {
+  const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [pinned, setPinned] = useState(false);
   const [ends, setEnds] = useState('');
   const list = d.announcements || [];
-  const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
+  const todayStr = todayTW();
 
   async function publish() {
     const ok = await act('addAnnouncement', { title, body, pinned, ends }, '公告已發布');
-    if (ok) { setTitle(''); setBody(''); setPinned(false); setEnds(''); }
+    if (ok) { setTitle(''); setBody(''); setPinned(false); setEnds(''); setAdding(false); }
   }
 
   return (
     <div className="stack">
-      <div className="card stack">
-        <h4>發布新公告</h4>
-        <input value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} placeholder="公告標題" />
-        <textarea rows={5} maxLength={3000} value={body} onChange={(e) => setBody(e.target.value)} placeholder="公告內容(可換行)" />
-        <div>
-          <div className="field-label" style={{ marginBottom: 6 }}>公告顯示到哪一天(選填,留空 = 不限期)</div>
-          <DateField value={ends} onChange={setEnds} min={todayStr} />
-        </div>
-        <div className="row between">
-          <span>置頂這則公告</span>
-          <Toggle checked={pinned} onChange={setPinned} label="置頂" />
-        </div>
-        <button disabled={!title.trim() || !body.trim() || !!dateProblem(ends, todayStr)} onClick={publish}>發布公告</button>
+      <div className="row between">
+        <span className="muted" style={{ flex: 1 }}>已發布 {list.length} 則 · 學生進站會自動彈出,按「了解」後 3 天內不再出現;過了截止日自動隱藏。</span>
+        <button className={adding ? 'sec' : ''} style={{ flex: 'none' }} onClick={() => setAdding((a) => !a)}>{adding ? '取消' : '＋ 發布公告'}</button>
       </div>
 
-      <div className="muted">已發布 {list.length} 則。學生進站會自動彈出公告,按「了解」後 3 天內不再出現;超過截止日的公告會自動隱藏。</div>
-      {list.map((a) => <AnnItem key={a.id} a={a} act={act} todayStr={todayStr} />)}
+      {adding && (
+        <div className="card stack">
+          <h4>發布新公告</h4>
+          <input value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} placeholder="公告標題" />
+          <textarea rows={5} maxLength={3000} value={body} onChange={(e) => setBody(e.target.value)} placeholder="公告內容(可換行)" />
+          <div>
+            <div className="field-label" style={{ marginBottom: 6 }}>顯示到哪一天(選填,留空 = 不限期)</div>
+            <DateField value={ends} onChange={setEnds} min={todayStr} />
+          </div>
+          <div className="row between">
+            <span>置頂這則公告</span>
+            <Toggle checked={pinned} onChange={setPinned} label="置頂" />
+          </div>
+          <button disabled={!title.trim() || !body.trim() || !!dateProblem(ends, todayStr)} onClick={publish}>發布公告</button>
+        </div>
+      )}
+
+      {!list.length && !adding && <div className="alert">目前沒有公告,按右上角「＋ 發布公告」建立。</div>}
+      <div className="alist">
+        {list.map((a) => <AnnItem key={a.id} a={a} act={act} todayStr={todayStr} />)}
+      </div>
     </div>
   );
 }
 
 function AnnItem({ a, act, todayStr }) {
   const [end, setEnd] = useState(a.ends || '');
+  const [edit, setEdit] = useState(false);
   const expired = a.ends && a.ends < todayStr;
   return (
-    <div>
-      {[a].map((a) => (
-        <div key={a.id} className="card">
-          <div className="row between" style={{ alignItems: 'flex-start' }}>
-            <b style={{ overflowWrap: 'anywhere' }}>{a.title}</b>
-            <span style={{ flex: 'none' }}>
-              {a.pinned && <span className="tag ok">置頂</span>}
-              {expired && <span className="tag bad">已過期</span>}
-            </span>
-          </div>
-          <div className="muted" style={{ margin: '2px 0 6px' }}>{a.time} · {a.ends ? `顯示到 ${a.ends}` : '不限期'}</div>
-          <div style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{a.body}</div>
-          <div className="row" style={{ marginTop: 10 }}>
-            <div style={{ flex: 1, minWidth: 0 }}><DateField value={end} onChange={setEnd} min={todayStr} /></div>
-          </div>
-          <div className="row" style={{ marginTop: 8 }}>
-            <button className="sec small" disabled={!!dateProblem(end, todayStr)} onClick={() => act('setAnnouncementEnd', { id: a.id, ends: end }, end ? `已改為顯示到 ${end}` : '已改為不限期')}>儲存日期</button>
-          </div>
-          <div className="row" style={{ marginTop: 8 }}>
-            <button className="sec small" onClick={() => act('pinAnnouncement', { id: a.id, pinned: !a.pinned }, a.pinned ? '已取消置頂' : '已置頂')}>{a.pinned ? '取消置頂' : '置頂'}</button>
-            <button className="danger small" onClick={() => { if (confirm('確定要刪除這則公告嗎?')) act('deleteAnnouncement', { id: a.id }, '公告已刪除'); }}>刪除</button>
+    <div className={`card ${expired ? 'dim' : ''}`}>
+      <div className="row between" style={{ alignItems: 'flex-start' }}>
+        <b style={{ overflowWrap: 'anywhere' }}>{a.title}</b>
+        <span style={{ flex: 'none' }}>
+          {a.pinned && <span className="tag ok">置頂</span>}
+          {expired && <span className="tag bad">已過期</span>}
+        </span>
+      </div>
+      <div className="muted" style={{ margin: '2px 0 6px' }}>{a.time} · {a.ends ? `顯示到 ${a.ends}` : '不限期'}</div>
+      <div style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{a.body}</div>
+
+      {edit && (
+        <div className="stack" style={{ marginTop: 10 }}>
+          <DateField value={end} onChange={setEnd} min={todayStr} />
+          <div className="row">
+            <button className="small" disabled={!!dateProblem(end, todayStr)} onClick={async () => { if (await act('setAnnouncementEnd', { id: a.id, ends: end }, end ? `已改為顯示到 ${end}` : '已改為不限期')) setEdit(false); }}>儲存日期</button>
+            <button className="sec small" onClick={() => { setEnd(a.ends || ''); setEdit(false); }}>取消</button>
           </div>
         </div>
-      ))}
+      )}
+
+      <div className="row wrapr" style={{ marginTop: 10 }}>
+        <button className="sec small" onClick={() => act('pinAnnouncement', { id: a.id, pinned: !a.pinned }, a.pinned ? '已取消置頂' : '已置頂')}>{a.pinned ? '取消置頂' : '置頂'}</button>
+        <button className="sec small" onClick={() => setEdit((e) => !e)}>{edit ? '收起日期' : '修改日期'}</button>
+        <button className="danger small" onClick={() => { if (confirm('確定要刪除這則公告嗎?')) act('deleteAnnouncement', { id: a.id }, '公告已刪除'); }}>刪除</button>
+      </div>
     </div>
   );
 }
@@ -455,6 +516,10 @@ function SubjectsTab({ d, act }) {
     <div className="card stack">
       <h4>系統科目</h4>
       <div className="muted">新增或移除後,首頁的科目按鈕會同步更新,AI 也會依所選科目切換專業解題模式。</div>
+      <div className="row">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="新科目名稱,例如:物理、歷史" />
+        <button style={{ flex: 'none' }} disabled={!name.trim()} onClick={async () => { if (await act('addSubject', { name }, `已新增科目:${name.trim()}`)) setName(''); }}>新增</button>
+      </div>
       <div className="tags" style={{ marginTop: 0 }}>
         {subs.map((s) => (
           <span key={s} className="subchip">{s}
@@ -464,10 +529,6 @@ function SubjectsTab({ d, act }) {
         ))}
       </div>
       {subs.length <= 1 && <div className="muted">系統至少需保留一種科目。</div>}
-      <div className="row">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="新科目名稱,例如:物理、歷史" />
-        <button style={{ flex: 'none' }} disabled={!name.trim()} onClick={async () => { if (await act('addSubject', { name }, `已新增科目:${name.trim()}`)) setName(''); }}>新增</button>
-      </div>
     </div>
   );
 }
@@ -490,12 +551,15 @@ function AITab({ d, act }) {
   const [o, setO] = useState(c.enable_openai);
   const [gm, setGm] = useState(c.selected_gemini_model);
   const [om, setOm] = useState(c.selected_openai_model);
+  const dirty = g !== c.enable_gemini || o !== c.enable_openai || gm !== c.selected_gemini_model || om !== c.selected_openai_model;
   return (
     <div className="stack">
-      <Engine title="Google Gemini" on={g} setOn={setG} model={gm} setModel={setGm} options={GEMINI} />
-      <Engine title="OpenAI GPT" on={o} setOn={setO} model={om} setModel={setOm} options={OPENAI} />
-      <div className="muted">兩個都開啟時,會先用 Gemini;太忙或失敗時,自動換備用 Gemini 模型,最後才用 OpenAI。</div>
-      <button onClick={() => act('saveSettings', { enable_gemini: g, enable_openai: o, selected_gemini_model: gm, selected_openai_model: om }, '已儲存 AI 設定')}>儲存 AI 設定</button>
+      <div className="engines">
+        <Engine title="Google Gemini" on={g} setOn={setG} model={gm} setModel={setGm} options={GEMINI} />
+        <Engine title="OpenAI GPT" on={o} setOn={setO} model={om} setModel={setOm} options={OPENAI} />
+      </div>
+      <div className="muted">兩個都開啟時,會先用 Gemini;主要模型額度用完或太忙時,自動依序換備用 Gemini 模型,最後才用 OpenAI。</div>
+      <button disabled={!dirty} onClick={() => act('saveSettings', { enable_gemini: g, enable_openai: o, selected_gemini_model: gm, selected_openai_model: om }, '已儲存 AI 設定')}>{dirty ? '儲存 AI 設定' : '沒有變更'}</button>
     </div>
   );
 }
@@ -511,13 +575,15 @@ function BugsTab({ d, act }) {
           <button className="danger small" onClick={() => { if (confirm(`確定要刪除全部 ${d.bugs.length} 則回報嗎?`)) act('clearBugs', {}, '已清除全部回報'); }}>全部清除</button>
         </div>
       )}
-      {d.bugs.map((b, i) => (
-        <div key={`${b.time}-${i}`} className="card">
-          <div className="row between"><b>{b.user}</b><small className="muted">{b.time}</small></div>
-          <div style={{ marginTop: 6, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{b.message}</div>
-          <button className="danger small" style={{ marginTop: 10 }} onClick={() => act('deleteBug', { time: b.time, user: b.user, message: b.message }, '已刪除這則回報')}>刪除</button>
-        </div>
-      ))}
+      <div className="alist">
+        {d.bugs.map((b, i) => (
+          <div key={`${b.time}-${i}`} className="card">
+            <div className="row between"><b>{b.user}</b><small className="muted">{b.time}</small></div>
+            <div style={{ marginTop: 6, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{b.message}</div>
+            <button className="danger small" style={{ marginTop: 10 }} onClick={() => act('deleteBug', { time: b.time, user: b.user, message: b.message }, '已刪除這則回報')}>刪除</button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

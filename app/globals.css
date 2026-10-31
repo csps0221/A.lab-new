@@ -398,3 +398,41 @@ button.th-card.on { background:rgba(255,255,255,.19); }
 button.switch.on { background:#4E9F86; }
 .new, .navdot { background:#C25455; }
 .stat .num.ok { color:#7DBFA9; } .stat .num.bad { color:#D98A8A; }
+
+/* ===== 後台排版 v3 ===== */
+.wrap:has(.admin-root) { max-width:1040px; }
+.admin-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.admin-head h3 { font-size:18px; line-height:1.2; }
+button.back-s { padding:6px 11px; font-size:16px; border-radius:12px; flex:none; }
+.ai-pill { display:inline-block; margin-top:2px; font-size:12px; color:#94A3B8; }
+.ai-pill.ok { color:#7DBFA9; } .ai-pill.bad { color:#D98A8A; }
+
+.admin-stats { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+@media (min-width:640px) { .admin-stats { grid-template-columns:repeat(4,1fr); gap:10px; } }
+.stat { padding:10px 8px; border-radius:14px; }
+.stat .num { font-size:20px; }
+.stat .muted { font-size:11px; margin-top:2px; }
+
+.atabs { position:sticky; top:0; z-index:15; display:flex; gap:4px; padding:4px; border:1px solid var(--border); border-radius:999px; background:color-mix(in srgb, var(--bg) 80%, #20252F); overflow-x:auto; scrollbar-width:none; }
+.atabs::-webkit-scrollbar { display:none; }
+button.atab { flex:1 0 auto; white-space:nowrap; background:transparent; color:#98A4BC; border-radius:999px; padding:8px 14px; font-size:13.5px; font-weight:600; }
+button.atab.on { background:rgba(255,255,255,.14); color:#fff; }
+button.atab .cnt { margin-left:6px; background:rgba(0,0,0,.3); border-radius:99px; padding:1px 7px; font-size:11px; }
+
+.alist { display:grid; grid-template-columns:1fr; gap:10px; align-items:start; }
+@media (min-width:900px) { .alist { grid-template-columns:1fr 1fr; } .engines { grid-template-columns:1fr 1fr !important; } }
+.engines { display:grid; grid-template-columns:1fr; gap:10px; }
+
+.field-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.fld { display:flex; flex-direction:column; gap:5px; min-width:0; }
+.fld.wide { grid-column:1 / -1; }
+.ucard-body { gap:14px; }
+.ucard-head .chev { color:#94A3B8; }
+.card.dim { opacity:.65; }
+
+.rv-top { gap:8px; }
+.rv-top .rv-tag { margin-left:auto; }
+.rv-dot { width:9px; height:9px; border-radius:50%; flex:none; background:#64748B; }
+.rv-dot.correct { background:#4E9F86; } .rv-dot.incorrect { background:#C25455; }
+.rv-sub { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rv-review { padding:12px; border:1px solid var(--border); border-radius:14px; background:rgba(255,255,255,.03); }
