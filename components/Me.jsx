@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/client';
-import { ThemeChooser } from './ThemePicker';
+import { ThemeSections } from './ThemePicker';
 import { getTheme } from '@/lib/themes';
 
 const FONTS = [['small', '小'], ['medium', '中'], ['large', '大']];
@@ -97,7 +97,7 @@ export default function Me({ me, remains, pct, theme, onTheme, prefs, setPrefs, 
       {view === 'install' && <Install canInstall={canInstall} onInstall={onInstall} />}
       {view === 'password' && <Password username={me.username} onDone={back} />}
       {view === 'favorites' && <Favorites favIds={favIds} onOpen={onOpenRecord} />}
-      {view === 'theme' && <div className="card"><ThemeChooser theme={theme} onChange={onTheme} /></div>}
+      {view === 'theme' && <ThemeSections theme={theme} onChange={onTheme} />}
       {view === 'font' && (
         <>
           <div className="card menu">

@@ -1,28 +1,31 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { THEMES, CATEGORIES, getTheme } from '@/lib/themes';
 
-// 分頁 + 主題卡片(右上角面板與「我」頁面共用)
-export function ThemeChooser({ theme, onChange }) {
-  const cur = getTheme(theme);
-  const [cat, setCat] = useState(cur.cat);
+const IBack = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+);
+
+// 依類別分區、兩欄的主題卡片(右上角的主題頁與「我 → 主題配色」共用)
+export function ThemeSections({ theme, onChange }) {
   return (
-    <>
-      <div className="tp-tabs" role="tablist">
-        {CATEGORIES.map((c) => (
-          <button key={c} type="button" role="tab" aria-selected={cat === c} className={`tp-tab ${cat === c ? 'on' : ''}`} onClick={() => setCat(c)}>{c}</button>
-        ))}
-      </div>
-      <div className="tp-grid">
-        {THEMES.filter((t) => t.cat === cat).map((t) => (
-          <button key={t.id} type="button" className={`tp-item ${t.id === theme ? 'on' : ''}`} onClick={() => onChange(t.id)}>
-            <span className="tp-sw" style={{ background: t.swatch, borderColor: t.vars['--border'] }} />
-            <span>{t.name}</span>
-            {t.id === theme && <span className="tp-check" aria-hidden="true">✓</span>}
-          </button>
-        ))}
-      </div>
-    </>
+    <div className="th-sections">
+      {CATEGORIES.map((c) => (
+        <section key={c}>
+          <div className="th-cat">{c}</div>
+          <div className="th-grid">
+            {THEMES.filter((t) => t.cat === c).map((t) => (
+              <button key={t.id} type="button" className={`th-card ${t.id === theme ? 'on' : ''}`} aria-pressed={t.id === theme} onClick={() => onChange(t.id)}>
+                <span className="th-sw" style={{ background: t.swatch }} />
+                <span className="th-name">{t.name}</span>
+                {t.id === theme && <span className="th-check" aria-hidden="true">✓</span>}
+              </button>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
   );
 }
 
@@ -34,24 +37,27 @@ export default function ThemePicker({ theme, onChange, disabled }) {
     if (!open) return;
     const onKey = (e) => e.key === 'Escape' && setOpen(false);
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
   }, [open]);
 
   return (
     <>
-      <button type="button" className="swatch-btn" disabled={disabled} aria-label="外觀主題" aria-expanded={open}
-        style={{ background: cur.swatch }} onClick={() => setOpen((o) => !o)}>
-        <span className="swatch-dot" style={{ background: cur.vars['--btn'] }} />
-      </button>
+      <button type="button" className="swatch-btn" disabled={disabled} aria-label="主題配色" aria-expanded={open}
+        style={{ background: cur.swatch }} onClick={() => setOpen(true)} />
 
-      {open && (
-        <>
-          <div className="tp-overlay" onClick={() => setOpen(false)} />
-          <div className="tp-panel card" role="dialog" aria-label="外觀主題">
-            <div className="tp-title">外觀主題 · 找到你的風格</div>
-            <ThemeChooser key={theme} theme={theme} onChange={onChange} />
+      {open && createPortal(
+        <div className="th-page" role="dialog" aria-modal="true" aria-label="主題配色">
+          <div className="th-head">
+            <div className="th-head-in">
+              <button type="button" className="th-back" onClick={() => setOpen(false)} aria-label="返回"><IBack /></button>
+              <h2>主題配色</h2>
+            </div>
           </div>
-        </>
+          <div className="th-inner"><ThemeSections theme={theme} onChange={onChange} /></div>
+        </div>,
+        document.body,
       )}
     </>
   );

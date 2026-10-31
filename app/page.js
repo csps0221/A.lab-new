@@ -11,7 +11,7 @@ const LabAI = dynamic(() => import('@/components/LabAI'), { ssr: false, loading:
 const Me = dynamic(() => import('@/components/Me'), { ssr: false, loading: () => <div className="muted">載入中...</div> });
 import ThemePicker from '@/components/ThemePicker';
 import AnnouncementModal from '@/components/AnnouncementModal';
-import { THEMES, DEFAULT_THEME, applyTheme } from '@/lib/themes';
+import { DEFAULT_THEME, applyTheme, resolveThemeId } from '@/lib/themes';
 
 const Icon = ({ k }) => {
   const p = { width: 24, height: 24, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true };
@@ -79,7 +79,8 @@ export default function Page() {
 
   useEffect(() => {
     const t = localStorage.getItem('alab_theme');
-    if (t && THEMES.some((x) => x.id === t)) { setTheme(t); applyTheme(t); }
+    const rid = t && resolveThemeId(t);
+    if (rid) { setTheme(rid); applyTheme(rid); }
   }, []);
 
   function changeTheme(t) {

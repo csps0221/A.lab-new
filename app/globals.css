@@ -365,3 +365,36 @@ button.chip.on .dot { box-shadow:0 0 0 2px color-mix(in srgb, var(--c) 35%, tran
   .bub { padding:9px 12px; font-size:14px; }
   .modal { padding:14px; }
 }
+
+/* ===== 底部導覽列:圓弧(膠囊)外框 ===== */
+.navin { border-radius:999px; padding:6px 8px; background:color-mix(in srgb, var(--bg) 58%, #1E232C); border:1px solid color-mix(in srgb, var(--border) 65%, transparent); box-shadow:0 6px 22px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.05); }
+button.navbtn { border-radius:999px; color:#98A4BC; }
+button.navbtn.on { background:rgba(0,0,0,.34); color:#fff; font-weight:700; box-shadow:inset 0 0 0 1px rgba(255,255,255,.04); }
+
+/* ===== 主題配色頁面(分類、兩欄、灰色卡片) ===== */
+.swatch-btn { border:1.5px solid rgba(255,255,255,.18); }
+.th-page { position:fixed; inset:0; z-index:70; background:var(--bg); overflow-y:auto; -webkit-overflow-scrolling:touch; }
+.th-head { position:sticky; top:0; z-index:2; background:var(--bg); border-bottom:1px solid var(--border); padding:12px 16px; }
+.th-head-in { max-width:760px; margin:0 auto; display:flex; align-items:center; gap:14px; }
+.th-head h2 { margin:0; font-size:20px; font-weight:600; }
+button.th-back { width:42px; height:42px; padding:0; border-radius:50%; background:rgba(255,255,255,.14); color:#E5E7EB; display:flex; align-items:center; justify-content:center; flex:none; }
+.th-inner { max-width:760px; margin:0 auto; padding:18px 16px 48px; }
+.th-sections { display:flex; flex-direction:column; gap:22px; }
+.th-cat { color:#A1A1AA; font-size:14px; font-weight:600; margin:0 2px 10px; }
+.th-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+button.th-card { display:flex; align-items:center; gap:12px; background:rgba(255,255,255,.1); color:#F4F4F5; border:0; border-radius:20px; padding:10px 12px; font-size:15px; font-weight:700; text-align:left; }
+button.th-card.on { background:rgba(255,255,255,.19); }
+.th-sw { width:46px; height:46px; border-radius:14px; flex:none; border:1px solid rgba(255,255,255,.12); }
+.th-name { min-width:0; line-height:1.25; overflow-wrap:anywhere; }
+.th-check { margin-left:auto; flex:none; }
+
+/* ===== 降低亮度:狀態色改用柔和色 ===== */
+.bar > i { background:linear-gradient(90deg,#4E9F86,#6DB5A0); }
+.tag.ok { background:#3F8A74; } .tag.bad { background:#B5474A; }
+.check { background:#4E9F86; }
+.answer { border-color:#4E9F86; background:rgba(78,159,134,.1); }
+.opt.ok { border-left-color:#4E9F86; } .opt.bad { border-left-color:#C25455; }
+.alert.bad { border-color:#C25455; background:rgba(194,84,85,.12); }
+button.switch.on { background:#4E9F86; }
+.new, .navdot { background:#C25455; }
+.stat .num.ok { color:#7DBFA9; } .stat .num.bad { color:#D98A8A; }
