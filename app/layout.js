@@ -3,7 +3,8 @@ import './globals.css';
 export const metadata = {
   title: 'A.lab | 解題實驗室',
   description: 'Science Lab Solution Platform',
-  icons: { icon: '/icon-192.png', apple: '/icon-192.png' },
+  icons: { icon: '/icon-192.png', apple: '/apple-touch-icon.png' },
+  appleWebApp: { capable: true, title: 'A.lab', statusBarStyle: 'black' },
 };
 export const viewport = { width: 'device-width', initialScale: 1, themeColor: '#030616' };
 

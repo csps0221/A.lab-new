@@ -173,18 +173,71 @@ function Tutorial() {
 }
 
 function Install({ canInstall, onInstall }) {
-  const [standalone, setStandalone] = useState(false);
+  const [env, setEnv] = useState({ standalone: false, ios: false, inApp: false, canShare: false });
+  const [shared, setShared] = useState(false);
+  const [msg, setMsg] = useState('');
+
   useEffect(() => {
-    setStandalone(!!window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true);
+    const ua = navigator.userAgent;
+    setEnv({
+      standalone: !!window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true,
+      ios: /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
+      inApp: /Line\/|FBAN|FBAV|Instagram|MicroMessenger|Threads|; wv\)/i.test(ua), // LINE、Facebook 等 App 內建瀏覽器
+      canShare: typeof navigator.share === 'function',
+    });
   }, []);
+
+  async function oneTap() {
+    setMsg('');
+    if (canInstall) { await onInstall(); return; }              // Android / 電腦版 Chrome:直接跳出安裝視窗
+    if (env.ios && env.canShare && !env.inApp) {                  // iPhone:開啟分享選單,「加入主畫面」就在裡面
+      try { await navigator.share({ title: 'A.lab | 解題實驗室', url: window.location.origin }); setShared(true); }
+      catch (e) { if (e?.name !== 'AbortError') setMsg('無法開啟分享選單,請照下面的步驟操作。'); }
+      return;
+    }
+    setMsg(env.ios ? '請先改用 Safari 開啟本網站,再按一次;或照下面的步驟操作。' : '這個瀏覽器沒有一鍵安裝功能,請照下面的步驟操作。');
+  }
+  async function copyUrl() {
+    try { await navigator.clipboard.writeText(window.location.origin); setMsg('已複製網址,請貼到 Safari 的網址列開啟。'); }
+    catch { setMsg(window.location.origin); }
+  }
+
   return (
     <div className="stack">
-      {standalone && <div className="alert">你已經是從主畫面開啟的了 🎉</div>}
-      {canInstall && <button onClick={onInstall}>立即加入主畫面</button>}
+      {env.standalone && <div className="alert">你已經是從主畫面開啟的了 🎉</div>}
+
+      {!env.standalone && env.ios && env.inApp && (
+        <div className="alert bad">
+          <b>你現在是在 App 內建瀏覽器(例如 LINE)</b>,iPhone 不能在這裡加入主畫面。請按右上角選單選「在 Safari 開啟」,或複製網址貼到 Safari。
+          <div style={{ marginTop: 8 }}><button type="button" className="sec small" onClick={copyUrl}>複製網址</button></div>
+        </div>
+      )}
+
+      {!env.standalone && (
+        <button type="button" className="bigbtn" onClick={oneTap}>
+          一鍵加入主畫面{env.ios && !canInstall && <small style={{ display: 'block', fontWeight: 400, opacity: .8 }}>會開啟 iPhone 的分享選單</small>}
+        </button>
+      )}
+      {msg && <div className="alert">{msg}</div>}
+
+      {shared && (
+        <div className="card" style={{ borderColor: 'var(--hl)' }}>
+          <b>接下來兩步:</b>
+          <ol style={{ margin: '8px 0 0', paddingLeft: 20, lineHeight: 1.8 }}>
+            <li>在剛跳出的選單裡往下滑,點「<b>加入主畫面</b>」。</li>
+            <li>按右上角「<b>新增</b>」,桌面就會出現 A.lab。</li>
+          </ol>
+        </div>
+      )}
+
+      {env.ios && (
+        <div className="muted">iPhone 的限制:Apple 不開放網站自動加入主畫面,所以「一鍵」只能幫你打開分享選單,「加入主畫面」要自己點一下。</div>
+      )}
+
       <div className="card">
-        <b>Android(Chrome)</b>
+        <b>Android(Chrome、Samsung Internet)</b>
         <ol style={{ margin: '8px 0 0', paddingLeft: 20, lineHeight: 1.8 }}>
-          <li>點右上角的「⋮」選單。</li>
+          <li>點右上角的「⋮」選單(或網址列的安裝圖示)。</li>
           <li>選「加到主畫面」或「安裝應用程式」。</li>
           <li>按「新增」或「安裝」,桌面就會出現 A.lab 圖示。</li>
         </ol>
@@ -192,7 +245,7 @@ function Install({ canInstall, onInstall }) {
       <div className="card">
         <b>iPhone(Safari)</b>
         <ol style={{ margin: '8px 0 0', paddingLeft: 20, lineHeight: 1.8 }}>
-          <li>用 Safari 開啟本網站,點下方的「分享」按鈕。</li>
+          <li>用 Safari 開啟本網站,點下方的「分享」按鈕(方框加向上箭頭)。</li>
           <li>往下滑,選「加入主畫面」。</li>
           <li>按右上角「新增」。</li>
         </ol>
