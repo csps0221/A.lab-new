@@ -436,3 +436,18 @@ button.atab .cnt { margin-left:6px; background:rgba(0,0,0,.3); border-radius:99p
 .rv-dot.correct { background:#4E9F86; } .rv-dot.incorrect { background:#C25455; }
 .rv-sub { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .rv-review { padding:12px; border:1px solid var(--border); border-radius:14px; background:rgba(255,255,255,.03); }
+
+/* ===== 還沒解題時,「解析」按鈕顯示為暗淡(點下去會提醒先去解題) ===== */
+button.navbtn.dim { opacity:.42; }
+
+/* ===== 紀錄頁面:上方分頁、標題、搜尋卡片 ===== */
+.rtabs { display:flex; gap:4px; padding:5px; border:1px solid var(--border); border-radius:22px; background:rgba(0,0,0,.22); }
+button.rtab { flex:1; background:transparent; color:#98A4BC; border-radius:17px; padding:11px 8px; font-size:15px; font-weight:700; }
+button.rtab.on { background:rgba(255,255,255,.16); color:#fff; }
+.rec-title { margin:0; font-size:24px; font-weight:700; }
+button.softbtn { background:rgba(255,255,255,.06); color:#fff; border:1px solid var(--border); border-radius:16px; padding:12px 16px; font-size:15px; font-weight:700; }
+button.softbtn.small { padding:9px 14px; font-size:14px; border-radius:14px; }
+button.softbtn.gray { background:rgba(255,255,255,.14); border-color:transparent; }
+button.softbtn .cnt { margin:0 2px 0 6px; background:rgba(0,0,0,.3); border-radius:99px; padding:1px 7px; font-size:11px; }
+.adv-panel { padding-top:12px; border-top:1px solid var(--border); gap:12px; }
+@media (max-width: 767px) { .rec-title { font-size:21px; } button.rtab { padding:9px 6px; font-size:14px; } }

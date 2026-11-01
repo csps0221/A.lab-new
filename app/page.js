@@ -28,6 +28,7 @@ export default function Page() {
   const [subjects, setSubjects] = useState([]);
   const [tab, setTab] = useState('home');
   const [latest, setLatest] = useState(null);
+  const [labChatId, setLabChatId] = useState(null); // 從「提問紀錄」點進來要開啟的對話
   const [solving, setSolving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -153,6 +154,7 @@ export default function Page() {
   const quotaLabel = isAdmin ? '管理員' : remains <= 0 ? '額度已用完' : remains / limit > 0.3 ? '題數充足' : '題數偏少';
   const navTo = (t) => {
     if (t === 'analysis' && !latest && !error && !solving) { setNotice('請先在首頁輸入或上傳題目並點擊「開始解題」!'); return; }
+    if (t === 'lab') setLabChatId(null);
     go(t);
   };
   const NAV = [['home', 'home', '首頁'], ['analysis', 'analysis', '解析'], ['history', 'history', '紀錄'], ['lab', 'lab', 'LAB AI'], ['me', 'me', '我']]; // 管理員的「後台」放在「我」頁面裡
@@ -166,7 +168,6 @@ export default function Page() {
           <div className="sub">Science Lab</div>
         </div>
         <ThemePicker theme={theme} onChange={changeTheme} disabled={solving} />
-        <button className="sec small" disabled={solving} onClick={logout}>登出</button>
       </header>
 
       {!['me', 'lab'].includes(tab) && (
@@ -192,7 +193,12 @@ export default function Page() {
       <div style={{ marginTop: 12 }}>
         {tab === 'analysis' && <Analysis loading={solving} error={error} record={latest} onHome={() => go('home')} username={me.username} onUpdate={setLatest}
           isFav={!!latest && favIds.includes(latest.id)} onFav={latest && latest.user === me.username ? toggleFav : null} />}
-        {tab === 'history' && <History onOpen={openRecord} />}
+        {tab === 'history' && (
+          <History subjects={subjects} favIds={favIds} onOpen={openRecord}
+            onOpenChat={(id) => { setLabChatId(id); go('lab'); }}
+            onStartSolve={() => go('home')}
+            onStartChat={() => { setLabChatId(null); go('lab'); }} />
+        )}
         {tab === 'me' && (
           <Me me={me} remains={remains} pct={pct} theme={theme} onTheme={changeTheme} prefs={prefs} setPrefs={setPrefs}
             anns={anns} unread={unread} markSeen={markSeen} favIds={favIds} onGo={go}
@@ -201,7 +207,7 @@ export default function Page() {
             onInstall={async () => { installEvt.prompt(); await installEvt.userChoice; setInstallEvt(null); }}
             onLogout={logout} />
         )}
-        {tab === 'lab' && <LabAI me={me} subjects={subjects} onBack={() => go('home')} onUsed={() => refresh(true)} />}
+        {tab === 'lab' && <LabAI key={labChatId || 'new'} me={me} subjects={subjects} initialChatId={labChatId} onBack={() => go('home')} onUsed={() => refresh(true)} />}
         {tab === 'admin' && isAdmin && <Admin onBack={() => go('me')} />}
       </div>
 
@@ -209,13 +215,13 @@ export default function Page() {
 
       <footer className="foot">
         <b>SCIENCE LAB</b>
-        <div>A.lab | 解題實驗室 v2.2.0</div>
+        <div>A.lab | 解題實驗室 v2.3.0</div>
       </footer>
 
       <nav className="bottomnav" aria-label="主要導覽">
         <div className="navin">
           {NAV.map(([k, icon, label]) => (
-            <button key={k} className={`navbtn ${tab === k || (k === 'me' && tab === 'admin') ? 'on' : ''}`} disabled={solving} onClick={() => navTo(k)}>
+            <button key={k} className={`navbtn ${tab === k || (k === 'me' && tab === 'admin') ? 'on' : ''} ${k === 'analysis' && tab !== 'analysis' && !latest && !error && !solving ? 'dim' : ''}`} disabled={solving} onClick={() => navTo(k)}>
               <Icon k={icon} />{label}
               {k === 'me' && unread && <i className="navdot" aria-label="有新公告" />}
             </button>

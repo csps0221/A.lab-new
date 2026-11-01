@@ -10,7 +10,7 @@ const IHist = () => <svg {...P}><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1" /><path 
 const INew = () => <svg {...P}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>;
 const ISend = () => <svg {...P}><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></svg>;
 
-export default function LabAI({ me, subjects, onBack, onUsed }) {
+export default function LabAI({ me, subjects, onBack, onUsed, initialChatId }) {
   const isAdmin = me.role === 'admin';
   const limit = me.lab_limit ?? 10;
   const [used, setUsed] = useState(me.lab_used_today || 0);
@@ -48,6 +48,8 @@ export default function LabAI({ me, subjects, onBack, onUsed }) {
     setView('history'); setList(null);
     try { setList((await api('/api/lab')).chats); } catch (e) { setErr(e.message); setList([]); }
   }
+  useEffect(() => { if (initialChatId) openChat(initialChatId); }, [initialChatId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function openChat(id) {
     try { setChat((await api(`/api/lab?id=${id}`)).chat); setErr(''); setView('chat'); } catch (e) { setErr(e.message); }
   }
