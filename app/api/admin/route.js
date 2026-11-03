@@ -118,6 +118,14 @@ export async function POST(req) {
       }
       break;
     }
+    case 'setReviewLimit': {
+      const u = await db.getUser(b.username);
+      if (!u) return err('找不到帳號');
+      if (b.limit === '' || b.limit == null) delete u.review_limit; // 留空 = 使用預設
+      else u.review_limit = clampLimit(b.limit);
+      await db.putUser(u);
+      break;
+    }
     case 'setAllLimit': {
       const limit = clampLimit(b.limit);
       for (const u of await db.listUsers()) {

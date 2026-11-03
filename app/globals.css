@@ -451,3 +451,32 @@ button.softbtn.gray { background:rgba(255,255,255,.14); border-color:transparent
 button.softbtn .cnt { margin:0 2px 0 6px; background:rgba(0,0,0,.3); border-radius:99px; padding:1px 7px; font-size:11px; }
 .adv-panel { padding-top:12px; border-top:1px solid var(--border); gap:12px; }
 @media (max-width: 767px) { .rec-title { font-size:21px; } button.rtab { padding:9px 6px; font-size:14px; } }
+
+/* ===== 拍照按鈕(只在手機/觸控裝置顯示) ===== */
+.cam-only { display:none !important; }
+@media (pointer: coarse), (max-width: 767px) { .cam-only { display:inline-block !important; } label.drop.cam-only { display:flex !important; } }
+label.drop.camera { margin-top:0; }
+
+/* ===== 左側選單 ===== */
+button.menu-btn { width:38px; height:38px; padding:0; flex:none; display:flex; align-items:center; justify-content:center; border-radius:12px; background:rgba(255,255,255,.08); color:#E5E7EB; border:1px solid var(--border); }
+.drawer-ov { position:fixed; inset:0; z-index:80; background:rgba(0,0,0,.55); }
+.drawer { position:absolute; left:0; top:0; bottom:0; width:min(320px, 84vw); background:var(--bg); border-right:1px solid var(--border); display:flex; flex-direction:column; padding:14px; animation:drawerIn .22s ease-out; box-shadow:8px 0 30px rgba(0,0,0,.5); }
+@keyframes drawerIn { from { transform:translateX(-100%); } to { transform:translateX(0); } }
+@media (prefers-reduced-motion: reduce) { .drawer { animation:none; } }
+.drawer-head { display:flex; align-items:center; justify-content:space-between; gap:10px; padding-bottom:14px; border-bottom:1px solid var(--border); }
+.drawer-list { display:flex; flex-direction:column; gap:8px; padding:14px 0; flex:1; }
+button.drawer-item { display:flex; align-items:center; gap:12px; width:100%; text-align:left; background:rgba(255,255,255,.06); color:#F4F4F5; border:1px solid var(--border); border-radius:16px; padding:12px 14px; font-weight:400; }
+button.drawer-item:disabled { opacity:.5; }
+.drawer-ico { font-size:22px; }
+.drawer-txt { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.drawer-foot { text-align:center; padding-top:10px; border-top:1px solid var(--border); font-size:12px; }
+
+/* ===== 考前複習 ===== */
+button.ropt { display:flex; align-items:center; gap:12px; width:100%; text-align:left; background:rgba(255,255,255,.06); color:#F4F4F5; border:1.5px solid var(--border); border-radius:14px; padding:11px 12px; font-weight:400; font-size:15px; }
+button.ropt > b { width:26px; height:26px; flex:none; display:flex; align-items:center; justify-content:center; border-radius:50%; background:rgba(255,255,255,.1); }
+button.ropt .ropt-t { flex:1; min-width:0; overflow-wrap:anywhere; }
+button.ropt.on { border-color:var(--hl); background:color-mix(in srgb, var(--hl) 14%, transparent); }
+button.ropt.right { border-color:#4E9F86; background:rgba(78,159,134,.16); }
+button.ropt.wrongp { border-color:#C25455; background:rgba(194,84,85,.16); }
+button.ropt:disabled { opacity:1; }
+.res-ok { border-color:#4E9F86; } .res-bad { border-color:#C25455; }

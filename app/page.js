@@ -8,8 +8,10 @@ const Analysis = dynamic(() => import('@/components/Analysis'), { ssr: false, lo
 const History = dynamic(() => import('@/components/History'), { ssr: false, loading: () => <div className="muted">載入中...</div> });
 const Admin = dynamic(() => import('@/components/Admin'), { ssr: false, loading: () => <div className="muted">載入中...</div> });
 const LabAI = dynamic(() => import('@/components/LabAI'), { ssr: false, loading: () => <div className="muted">載入中...</div> });
+const Review = dynamic(() => import('@/components/Review'), { ssr: false, loading: () => <div className="muted">載入中...</div> });
 const Me = dynamic(() => import('@/components/Me'), { ssr: false, loading: () => <div className="muted">載入中...</div> });
 import ThemePicker from '@/components/ThemePicker';
+import SideMenu from '@/components/SideMenu';
 import AnnouncementModal from '@/components/AnnouncementModal';
 import { DEFAULT_THEME, applyTheme, resolveThemeId } from '@/lib/themes';
 
@@ -28,6 +30,7 @@ export default function Page() {
   const [subjects, setSubjects] = useState([]);
   const [tab, setTab] = useState('home');
   const [latest, setLatest] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [labChatId, setLabChatId] = useState(null); // 從「提問紀錄」點進來要開啟的對話
   const [solving, setSolving] = useState(false);
   const [error, setError] = useState('');
@@ -162,6 +165,9 @@ export default function Page() {
   return (
     <div className="wrap with-nav">
       <header className="hdr">
+        <button type="button" className="menu-btn" aria-label="開啟選單" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+        </button>
         <div className="logo">🧪</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="title">A.lab | 解題實驗室</div>
@@ -170,7 +176,7 @@ export default function Page() {
         <ThemePicker theme={theme} onChange={changeTheme} disabled={solving} />
       </header>
 
-      {!['me', 'lab'].includes(tab) && (
+      {!['me', 'lab', 'review'].includes(tab) && (
       <div className="card userbar">
         <div className="row">
           <div className="avatar">{me.username[0]}</div>
@@ -208,10 +214,18 @@ export default function Page() {
             onLogout={logout} />
         )}
         {tab === 'lab' && <LabAI key={labChatId || 'new'} me={me} subjects={subjects} initialChatId={labChatId} onBack={() => go('home')} onUsed={() => refresh(true)} />}
+        {tab === 'review' && <Review onBack={() => go('home')} />}
         {tab === 'admin' && isAdmin && <Admin onBack={() => go('me')} />}
       </div>
 
       {!solving && <AnnouncementModal items={pendingAnns} onAck={ackAnns} />}
+
+      <SideMenu open={menuOpen} onClose={() => setMenuOpen(false)} user={me}
+        items={[
+          { key: 'lab', icon: '💬', label: 'LAB AI', desc: '學科聊天助教', onClick: () => { setLabChatId(null); go('lab'); } },
+          { key: 'review', icon: '📚', label: '考前複習', desc: me.review_enabled || isAdmin ? '題庫練習,答錯有 AI 解析' : '老師開放後才能使用',
+            badge: !me.review_enabled && !isAdmin ? '未開放' : (!me.review_enabled && isAdmin ? '測試中' : ''), disabled: !me.review_enabled && !isAdmin, onClick: () => go('review') },
+        ]} />
 
       <footer className="foot">
         <b>SCIENCE LAB</b>

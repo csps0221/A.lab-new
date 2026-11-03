@@ -8,5 +8,5 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const [u, cfg, announcements] = await Promise.all([getSessionUser(), db.getConfig(), db.listActiveAnnouncements()]);
   if (!u) return NextResponse.json({ error: '未登入' }, { status: 401 });
-  return NextResponse.json({ user: db.publicUser(u), subjects: db.allowedSubjects(u, cfg), announcements });
+  return NextResponse.json({ user: { ...db.publicUser(u), review_enabled: !!cfg.review_enabled }, subjects: db.allowedSubjects(u, cfg), announcements });
 }

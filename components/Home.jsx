@@ -63,9 +63,14 @@ export default function Home({ subjects, remains, locked, onSolve, defaultDepth 
         <div className="row between">
           <div className="stephead" style={{ margin: 0 }}><span className="step">1</span>上傳題目圖片</div>
           {files.length > 0 && !full && (
-            <label className="pillbtn">＋ 繼續加入圖片
-              <input type="file" accept="image/png,image/jpeg" multiple hidden disabled={locked} onChange={addFiles} />
-            </label>
+            <span className="row" style={{ gap: 8 }}>
+              <label className="pillbtn cam-only">📷 拍照
+                <input type="file" accept="image/*" capture="environment" hidden disabled={locked} onChange={addFiles} />
+              </label>
+              <label className="pillbtn">＋ 加入圖片
+                <input type="file" accept="image/png,image/jpeg" multiple hidden disabled={locked} onChange={addFiles} />
+              </label>
+            </span>
           )}
         </div>
 
@@ -75,6 +80,14 @@ export default function Home({ subjects, remains, locked, onSolve, defaultDepth 
             <span className="plus">＋</span>
             <b>選擇題目圖片</b>
             <small className="muted">可上傳 1~5 張,題目與解答皆可上傳</small>
+          </label>
+        )}
+        {files.length === 0 && (
+          <label className="drop camera cam-only">
+            <input type="file" accept="image/*" capture="environment" hidden disabled={locked} onChange={addFiles} />
+            <span className="plus">📷</span>
+            <b>用相機拍照</b>
+            <small className="muted">拍完就可以直接上傳</small>
           </label>
         )}
 

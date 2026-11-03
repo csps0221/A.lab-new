@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { api } from '@/lib/client';
+import { api, fileToB64 } from '@/lib/client';
 import Md from './Md';
 
 const GEMINI = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.1-pro'];
@@ -99,6 +99,7 @@ export default function Admin({ onBack }) {
     ['users', '使用者', students.length],
     ['review', '點評紀錄', pending],
     ['ann', '公告', d.announcements?.length || 0],
+    ['review', '考前複習'],
     ['subjects', '科目'],
     ['ai', 'AI 設定'],
     ['bugs', '回報', d.bugs.length],
@@ -135,6 +136,7 @@ export default function Admin({ onBack }) {
       {sub === 'users' && <UsersTab d={d} act={act} run={run} />}
       {sub === 'review' && <ReviewTab d={d} act={act} />}
       {sub === 'ann' && <AnnTab d={d} act={act} />}
+      {sub === 'review' && <ReviewAdminTab subjects={d.config.subjects} notify={(text, bad) => setToast({ text, bad })} />}
       {sub === 'subjects' && <SubjectsTab d={d} act={act} />}
       {sub === 'ai' && <AITab d={d} act={act} />}
       {sub === 'bugs' && <BugsTab d={d} act={act} />}
@@ -224,23 +226,26 @@ function UserCard({ u, subjects, act, run }) {
     cls: u.class_name || '使用者',
     limit: String(u.limit),
     lab: String(u.lab_limit ?? 10),
+    rev: u.review_limit == null ? '' : String(u.review_limit),
     sel: u.allowed_subjects?.length ? u.allowed_subjects : subjects,
   };
   const [open, setOpen] = useState(false);
   const [cls, setCls] = useState(init.cls);
   const [limit, setLimit] = useState(init.limit);
   const [labLimit, setLabLimit] = useState(init.lab);
+  const [revLimit, setRevLimit] = useState(init.rev);
   const [sel, setSel] = useState(init.sel);
   const pct = Math.min(100, (u.used_today / (u.limit || 1)) * 100);
   const toggle = (s) => setSel((p) => (p.includes(s) ? p.filter((x) => x !== s) : [...p, s]));
   const shown = u.allowed_subjects?.length ? u.allowed_subjects : ['全部科目'];
-  const dirty = cls !== init.cls || String(limit) !== init.limit || String(labLimit) !== init.lab || !sameSet(sel, init.sel);
+  const dirty = cls !== init.cls || String(limit) !== init.limit || String(labLimit) !== init.lab || String(revLimit) !== init.rev || !sameSet(sel, init.sel);
 
   function save() {
     const actions = [];
     if (cls !== init.cls) actions.push({ action: 'setProfile', username: u.username, class_name: cls });
     if (String(limit) !== init.limit) actions.push({ action: 'setLimit', username: u.username, limit });
     if (String(labLimit) !== init.lab) actions.push({ action: 'setLabLimit', username: u.username, limit: labLimit });
+    if (String(revLimit) !== init.rev) actions.push({ action: 'setReviewLimit', username: u.username, limit: revLimit });
     if (!sameSet(sel, init.sel)) actions.push({ action: 'setSubjects', username: u.username, subjects: sel });
     if (actions.length) run(actions, `已儲存 ${u.username} 的設定`);
   }
@@ -283,6 +288,10 @@ function UserCard({ u, subjects, act, run }) {
             <label className="fld">
               <span className="field-label">LAB AI 每日次數</span>
               <input type="number" min={1} value={labLimit} onChange={(e) => setLabLimit(e.target.value)} />
+            </label>
+            <label className="fld wide">
+              <span className="field-label">考前複習每日作答題數(留空 = 使用預設)</span>
+              <input type="number" min={1} value={revLimit} placeholder="使用預設" onChange={(e) => setRevLimit(e.target.value)} />
             </label>
           </div>
 
@@ -585,5 +594,179 @@ function BugsTab({ d, act }) {
         ))}
       </div>
     </div>
+  );
+}
+
+/* ---------------- 考前複習 ---------------- */
+function ReviewAdminTab({ subjects, notify }) {
+  const [rd, setRd] = useState(null);
+  const [err, setErr] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [lim, setLim] = useState('10');
+  const [fSource, setFSource] = useState('');
+  const [fSubject, setFSubject] = useState('');
+  const [kw, setKw] = useState('');
+  const [n, setN] = useState(20);
+
+  const load = async () => {
+    try { const d = await api('/api/review/admin'); setRd(d); setLim(String(d.config.default_limit)); }
+    catch (e) { setErr(e.message); }
+  };
+  useEffect(() => { load(); }, []);
+  const post = async (body, ok) => {
+    try { const r = await api('/api/review/admin', { method: 'POST', body }); notify(r.message || ok); await load(); return true; }
+    catch (e) { notify(e.message, true); return false; }
+  };
+
+  if (err) return <div className="alert bad">{err}</div>;
+  if (!rd) return <div className="alert">載入中...</div>;
+
+  const all = rd.questions;
+  const sources = [...new Set(all.map((q) => q.source))];
+  const shown = all.filter((q) => (!fSource || q.source === fSource) && (!fSubject || q.subject === fSubject) &&
+    (!kw.trim() || `${q.stem} ${q.source}`.toLowerCase().includes(kw.trim().toLowerCase())));
+  const noAns = all.filter((q) => !q.answer).length;
+
+  return (
+    <div className="stack">
+      <div className="card stack">
+        <div className="row between">
+          <div><b>開放考前複習</b><div className="muted">關閉時,學生在選單裡會看到「尚未開放」。</div></div>
+          <Toggle checked={rd.config.enabled} onChange={(v) => post({ action: 'setEnabled', enabled: v })} label="開放考前複習" />
+        </div>
+        <div className="field-label">預設每人每天可作答題數(個別學生可在「使用者」分頁另外設定)</div>
+        <div className="row">
+          <input type="number" min={1} value={lim} onChange={(e) => setLim(e.target.value)} />
+          <button style={{ flex: 'none' }} disabled={String(rd.config.default_limit) === lim} onClick={() => post({ action: 'setDefaultLimit', limit: lim })}>儲存</button>
+        </div>
+      </div>
+
+      <div className="row between">
+        <span className="muted" style={{ flex: 1 }}>題庫共 {all.length} 題{noAns > 0 && ` · ${noAns} 題沒有答案(不會開放)`}</span>
+        <button className={adding ? 'sec' : ''} style={{ flex: 'none' }} onClick={() => setAdding((a) => !a)}>{adding ? '取消' : '＋ 新增題目'}</button>
+      </div>
+
+      {adding && <AddQuestion subjects={subjects} onDone={async (body) => { const ok = await post(body); if (ok) setAdding(false); return ok; }} />}
+
+      {all.length > 0 && (
+        <div className="grid2">
+          <select value={fSource} onChange={(e) => { setFSource(e.target.value); setN(20); }} aria-label="題目來源">
+            <option value="">全部來源</option>{sources.map((s) => <option key={s}>{s}</option>)}
+          </select>
+          <select value={fSubject} onChange={(e) => { setFSubject(e.target.value); setN(20); }} aria-label="科目">
+            <option value="">全部科目</option>{subjects.map((s) => <option key={s}>{s}</option>)}
+          </select>
+        </div>
+      )}
+      {all.length > 0 && <input value={kw} onChange={(e) => { setKw(e.target.value); setN(20); }} placeholder="搜尋題目文字或來源..." />}
+      {!all.length && <div className="alert">題庫還是空的。按「＋ 新增題目」上傳題目圖片,AI 會自動辨識。</div>}
+
+      <div className="alist">
+        {shown.slice(0, n).map((q) => <QuestionItem key={q.id} q={q} subjects={subjects} post={post} />)}
+      </div>
+      {shown.length > n && <button className="sec" onClick={() => setN((x) => x + 20)}>顯示更多(還有 {shown.length - n} 題)</button>}
+    </div>
+  );
+}
+
+function AddQuestion({ subjects, onDone }) {
+  const [source, setSource] = useState('');
+  const [subject, setSubject] = useState(subjects[0] || '');
+  const [files, setFiles] = useState([]);
+  const [text, setText] = useState('');
+  const [answers, setAnswers] = useState('');
+  const [keep, setKeep] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const pick = (e) => { setFiles((p) => [...p, ...e.target.files].slice(0, 3)); e.target.value = ''; };
+
+  async function submit() {
+    setBusy(true); setMsg('');
+    try {
+      const images = await Promise.all(files.map((f) => fileToB64(f)));
+      const ok = await onDone({ action: 'create', source, subject, text, answers, images, keepImages: keep });
+      if (!ok) setMsg('新增失敗,請看上方提示後再試一次。');
+    } catch (e) { setMsg(e.message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="card stack">
+      <h4>新增題目</h4>
+      <label><span className="field-label">題目來源(必填)</span>
+        <input value={source} maxLength={60} onChange={(e) => setSource(e.target.value)} placeholder="例如:113 學測、第二次段考、南一版第三章" />
+      </label>
+      <label><span className="field-label">科目</span>
+        <select value={subject} onChange={(e) => setSubject(e.target.value)}>{subjects.map((s) => <option key={s}>{s}</option>)}</select>
+      </label>
+      <div>
+        <div className="field-label" style={{ marginBottom: 6 }}>題目圖片(最多 3 張,一張圖可以有多題)</div>
+        <div className="row wrapr">
+          <label className="pillbtn">＋ 選擇圖片<input type="file" accept="image/*" multiple hidden onChange={pick} /></label>
+          <label className="pillbtn cam-only">📷 拍照<input type="file" accept="image/*" capture="environment" hidden onChange={pick} /></label>
+          {files.length > 0 && <span className="muted">已選 {files.length} 張</span>}
+          {files.length > 0 && <button type="button" className="sec small" onClick={() => setFiles([])}>清除</button>}
+        </div>
+      </div>
+      <label><span className="field-label">或直接貼上題目文字(選填)</span>
+        <textarea rows={4} maxLength={6000} value={text} onChange={(e) => setText(e.target.value)} placeholder="沒有圖片時,貼上題目與選項" />
+      </label>
+      <label><span className="field-label">答案(選填;多題請依題號用逗號分開,例如 B,D,A)</span>
+        <input value={answers} onChange={(e) => setAnswers(e.target.value)} placeholder="沒填的題目,會由 AI 判斷答案" />
+      </label>
+      <div className="row between">
+        <span>保留原圖給學生看(題目有圖表時建議開啟)</span>
+        <Toggle checked={keep} onChange={setKeep} label="保留原圖" />
+      </div>
+      {msg && <div className="alert bad">{msg}</div>}
+      <button disabled={busy || !source.trim() || (!files.length && !text.trim())} onClick={submit}>{busy ? 'AI 辨識中,請稍候...' : 'AI 辨識並新增'}</button>
+      <div className="muted">AI 產生的答案可能有誤,新增後請在題庫中檢查;沒有答案的題目不會開放給學生。</div>
+    </div>
+  );
+}
+
+function QuestionItem({ q, subjects, post }) {
+  const [source, setSource] = useState(q.source);
+  const [subject, setSubject] = useState(q.subject);
+  const [stem, setStem] = useState(q.stem);
+  const [answer, setAnswer] = useState(q.answer);
+  const [imgs, setImgs] = useState(null);
+  const dirty = source !== q.source || subject !== q.subject || stem !== q.stem || answer !== q.answer;
+  const by = q.answer_by === 'admin' ? '管理員答案' : q.answer_by === 'ai' ? 'AI 答案' : '無答案';
+
+  return (
+    <details className="card rv">
+      <summary>
+        <span className="rv-top">
+          <span className={`rv-dot ${q.active ? 'correct' : ''}`} aria-hidden="true" />
+          <b>{q.subject}</b><span className="muted" style={{ overflowWrap: 'anywhere' }}>{q.source}</span>
+          <span className={`tag rv-tag ${q.answer_by === 'none' ? 'bad' : ''}`}>{q.active ? by : q.answer ? `已下架 · ${by}` : by}</span>
+        </span>
+        <span className="rv-sub muted">{q.stem.replace(/\s+/g, ' ')}</span>
+      </summary>
+      <div className="stack rv-body">
+        <div className="muted">{q.type === 'choice' ? '選擇題' : '非選擇題'} · 新增於 {q.created}</div>
+        <label><span className="field-label">題目</span><textarea rows={4} value={stem} onChange={(e) => setStem(e.target.value)} /></label>
+        {q.options?.length > 0 && <div className="stack" style={{ gap: 4 }}>{q.options.map((o) => <div key={o.k} className="muted">({o.k}) {o.t}</div>)}</div>}
+        <div className="field-grid">
+          <label className="fld"><span className="field-label">答案{q.type === 'choice' ? '(選項字母)' : ''}</span><input value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="必填才能開放" /></label>
+          <label className="fld"><span className="field-label">科目</span><select value={subject} onChange={(e) => setSubject(e.target.value)}>{subjects.map((s) => <option key={s}>{s}</option>)}</select></label>
+          <label className="fld wide"><span className="field-label">題目來源</span><input value={source} maxLength={60} onChange={(e) => setSource(e.target.value)} /></label>
+        </div>
+        {q.image_count > 0 && (imgs
+          ? <div className="grid3">{imgs.map((b, i) => <img key={i} alt="" src={`data:image/jpeg;base64,${b}`} style={{ width: '100%', borderRadius: 8 }} />)}</div>
+          : <button className="sec small" onClick={async () => setImgs((await api(`/api/review/admin?id=${q.id}`)).images)}>載入原圖({q.image_count})</button>)}
+        <div className="row between">
+          <span>開放給學生{!answer.trim() && <small className="muted"> (需先有答案)</small>}</span>
+          <Toggle checked={q.active} onChange={(v) => post({ action: 'update', id: q.id, active: v }, v ? '已開放' : '已下架')} label="開放給學生" />
+        </div>
+        <div className="row">
+          <button style={{ flex: 1 }} disabled={!dirty} onClick={() => post({ action: 'update', id: q.id, source, subject, stem, answer }, '題目已更新')}>{dirty ? '儲存變更' : '沒有變更'}</button>
+          <button className="danger" style={{ flex: 'none' }} onClick={() => { if (confirm('確定要刪除這一題嗎?')) post({ action: 'delete', id: q.id }, '題目已刪除'); }}>刪除</button>
+        </div>
+        <div className="muted">修改答案後,舊的 AI 解析會作廢並在下次有人答錯時重新產生。</div>
+      </div>
+    </details>
   );
 }
