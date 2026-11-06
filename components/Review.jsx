@@ -69,7 +69,7 @@ export default function Review({ onBack }) {
         <div className="card center stack" style={{ padding: '28px 16px' }}>
           <div style={{ fontSize: 38 }} aria-hidden="true">📚</div>
           <b style={{ fontSize: 18 }}>考前複習尚未開放</b>
-          <div className="muted">考試前,老師會開放這個功能,屆時就可以在這裡練習題目。</div>
+          <div className="muted">考試前,管理員會開放這個功能,屆時就可以在這裡練習題目。</div>
         </div>
       </div>
     );

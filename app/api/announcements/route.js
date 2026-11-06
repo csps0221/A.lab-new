@@ -11,7 +11,7 @@ export async function GET() {
   return NextResponse.json({ announcements: await db.listActiveAnnouncements() });
 }
 
-// 學生按「了解」:記下時間,3 天內不再彈出
+// 使用者按「了解」:記下時間,3 天內不再彈出
 export async function POST(req) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: '請先登入' }, { status: 401 });

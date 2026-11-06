@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { api, fileToB64 } from '@/lib/client';
+import { api, pdfToB64, PDF_MAX } from '@/lib/client';
 import Md from './Md';
 
 const GEMINI = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.1-pro'];
@@ -119,7 +119,7 @@ export default function Admin({ onBack }) {
       </div>
 
       <div className="admin-stats">
-        <Stat n={students.length} l="學生帳號" />
+        <Stat n={students.length} l="使用者帳號" />
         <Stat n={totalCount} l="累積解題" />
         <Stat n={`${usedToday} · ${labToday}`} l="今日 解題 · LAB AI" />
         <Stat n={`${acc.toFixed(0)}%`} l={`正確率(${reviewedCount} 筆已審)`} />
@@ -175,48 +175,48 @@ function UsersTab({ d, act, run }) {
   return (
     <div className="stack">
       <div className="row">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋學生帳號" aria-label="搜尋學生帳號" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋使用者帳號" aria-label="搜尋使用者帳號" />
         <button className={adding ? 'sec' : ''} style={{ flex: 'none' }} onClick={() => setAdding((a) => !a)}>{adding ? '取消' : '＋ 新增'}</button>
       </div>
 
       {adding && (
         <div className="card stack">
-          <h4>新增學生帳號</h4>
+          <h4>新增使用者帳號</h4>
           <input value={nu} onChange={(e) => setNu(e.target.value)} placeholder="帳號,例如:張小明" />
           <div className="field-grid">
             <label className="fld"><span className="field-label">預設密碼</span><input value={np} onChange={(e) => setNp(e.target.value)} /></label>
             <label className="fld"><span className="field-label">每日解題額度</span><input type="number" min={1} value={nl} onChange={(e) => setNl(e.target.value)} /></label>
           </div>
-          <div className="muted">學生第一次登入時,會被要求改密碼。</div>
+          <div className="muted">使用者第一次登入時,會被要求改密碼。</div>
           <button disabled={!nu.trim()} onClick={add}>建立帳號</button>
         </div>
       )}
 
       <details className="card slim">
-        <summary>批量設定額度(全體學生)</summary>
+        <summary>批量設定額度(全體使用者)</summary>
         <div className="field-grid" style={{ marginTop: 12 }}>
           <div className="fld">
             <span className="field-label">每日解題額度</span>
             <div className="row">
               <input type="number" min={1} value={all} onChange={(e) => setAll(e.target.value)} aria-label="每日解題額度" />
-              <button style={{ flex: 'none' }} onClick={() => act('setAllLimit', { limit: all }, `已將全體學生的每日額度調為 ${all} 題`)}>套用</button>
+              <button style={{ flex: 'none' }} onClick={() => act('setAllLimit', { limit: all }, `已將全體使用者的每日額度調為 ${all} 題`)}>套用</button>
             </div>
           </div>
           <div className="fld">
             <span className="field-label">LAB AI 每日次數</span>
             <div className="row">
               <input type="number" min={1} value={labAll} onChange={(e) => setLabAll(e.target.value)} aria-label="LAB AI 每日次數" />
-              <button style={{ flex: 'none' }} onClick={() => act('setAllLabLimit', { limit: labAll }, `已將全體學生的 LAB AI 次數調為 ${labAll} 次`)}>套用</button>
+              <button style={{ flex: 'none' }} onClick={() => act('setAllLabLimit', { limit: labAll }, `已將全體使用者的 LAB AI 次數調為 ${labAll} 次`)}>套用</button>
             </div>
           </div>
         </div>
       </details>
 
-      <div className="muted">共 {list.length} 位學生{q && '(符合搜尋)'} · 點開學生可調整額度、科目或刪除</div>
+      <div className="muted">共 {list.length} 位使用者{q && '(符合搜尋)'} · 點開使用者可調整額度、科目或刪除</div>
       <div className="alist">
         {list.map((u) => <UserCard key={u.username} u={u} subjects={d.config.subjects} act={act} run={run} />)}
       </div>
-      {!normal.length && <div className="alert">還沒有學生帳號,按右上角「＋ 新增」建立。</div>}
+      {!normal.length && <div className="alert">還沒有使用者帳號,按右上角「＋ 新增」建立。</div>}
     </div>
   );
 }
@@ -278,7 +278,7 @@ function UserCard({ u, subjects, act, run }) {
 
           <div className="field-grid">
             <label className="fld wide">
-              <span className="field-label">身分類別(顯示在學生的資訊卡)</span>
+              <span className="field-label">身分類別(顯示在使用者的資訊卡)</span>
               <input value={cls} maxLength={20} onChange={(e) => setCls(e.target.value)} placeholder="例如:高二 3 班、化學資優班" />
             </label>
             <label className="fld">
@@ -409,7 +409,7 @@ function ReviewItem({ log, act }) {
           </Sec>
         )}
         {r.followups?.length > 0 && (
-          <Sec title={`學生追問(${r.followups.length}/3)`}>
+          <Sec title={`使用者追問(${r.followups.length}/3)`}>
             <div className="stack">{r.followups.map((f, i) => (
               <div key={i} className="opt"><div><b>問:</b>{f.q}</div><Md>{f.a}</Md></div>
             ))}</div>
@@ -424,7 +424,7 @@ function ReviewItem({ log, act }) {
               ))}
             </div>
           </Sec>
-          <textarea rows={3} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="給學生的觀念補充、錯誤更正或學習建議..." />
+          <textarea rows={3} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="給使用者的觀念補充、錯誤更正或學習建議..." />
           <div className="row">
             <button style={{ flex: 1 }} onClick={() => act('review', { id: log.id, status, comment }, '點評已儲存')}>儲存點評</button>
             <button className="danger" style={{ flex: 'none' }} onClick={() => { if (confirm('確定要永久刪除這筆解題紀錄嗎?(含圖片、追問,無法復原)')) act('deleteRecords', { ids: [log.id] }); }}>刪除紀錄</button>
@@ -453,7 +453,7 @@ function AnnTab({ d, act }) {
   return (
     <div className="stack">
       <div className="row between">
-        <span className="muted" style={{ flex: 1 }}>已發布 {list.length} 則 · 學生進站會自動彈出,按「了解」後 3 天內不再出現;過了截止日自動隱藏。</span>
+        <span className="muted" style={{ flex: 1 }}>已發布 {list.length} 則 · 使用者進站會自動彈出,按「了解」後 3 天內不再出現;過了截止日自動隱藏。</span>
         <button className={adding ? 'sec' : ''} style={{ flex: 'none' }} onClick={() => setAdding((a) => !a)}>{adding ? '取消' : '＋ 發布公告'}</button>
       </div>
 
@@ -631,10 +631,10 @@ function ReviewAdminTab({ subjects, notify }) {
     <div className="stack">
       <div className="card stack">
         <div className="row between">
-          <div><b>開放考前複習</b><div className="muted">關閉時,學生在選單裡會看到「尚未開放」。</div></div>
+          <div><b>開放考前複習</b><div className="muted">關閉時,使用者在選單裡會看到「尚未開放」。</div></div>
           <Toggle checked={rd.config.enabled} onChange={(v) => post({ action: 'setEnabled', enabled: v })} label="開放考前複習" />
         </div>
-        <div className="field-label">預設每人每天可作答題數(個別學生可在「使用者」分頁另外設定)</div>
+        <div className="field-label">預設每人每天可作答題數(個別使用者可在「使用者」分頁另外設定)</div>
         <div className="row">
           <input type="number" min={1} value={lim} onChange={(e) => setLim(e.target.value)} />
           <button style={{ flex: 'none' }} disabled={String(rd.config.default_limit) === lim} onClick={() => post({ action: 'setDefaultLimit', limit: lim })}>儲存</button>
@@ -659,7 +659,7 @@ function ReviewAdminTab({ subjects, notify }) {
         </div>
       )}
       {all.length > 0 && <input value={kw} onChange={(e) => { setKw(e.target.value); setN(20); }} placeholder="搜尋題目文字或來源..." />}
-      {!all.length && <div className="alert">題庫還是空的。按「＋ 新增題目」上傳題目圖片,AI 會自動辨識。</div>}
+      {!all.length && <div className="alert">題庫還是空的。按「＋ 新增題目」上傳 PDF 檔,AI 會自動辨識。</div>}
 
       <div className="alist">
         {shown.slice(0, n).map((q) => <QuestionItem key={q.id} q={q} subjects={subjects} post={post} />)}
@@ -672,20 +672,26 @@ function ReviewAdminTab({ subjects, notify }) {
 function AddQuestion({ subjects, onDone }) {
   const [source, setSource] = useState('');
   const [subject, setSubject] = useState(subjects[0] || '');
-  const [files, setFiles] = useState([]);
+  const [file, setFile] = useState(null);
   const [text, setText] = useState('');
   const [answers, setAnswers] = useState('');
-  const [keep, setKeep] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
 
-  const pick = (e) => { setFiles((p) => [...p, ...e.target.files].slice(0, 3)); e.target.value = ''; };
+  const pick = (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    if (f.type !== 'application/pdf' && !/\.pdf$/i.test(f.name)) return setMsg('請選擇 PDF 檔案');
+    if (f.size > PDF_MAX) return setMsg('PDF 太大了(上限 3 MB),請壓縮或分成幾個檔案上傳');
+    setMsg(''); setFile(f);
+  };
 
   async function submit() {
     setBusy(true); setMsg('');
     try {
-      const images = await Promise.all(files.map((f) => fileToB64(f)));
-      const ok = await onDone({ action: 'create', source, subject, text, answers, images, keepImages: keep });
+      const pdf = file ? await pdfToB64(file) : '';
+      const ok = await onDone({ action: 'create', source, subject, text, answers, pdf });
       if (!ok) setMsg('新增失敗,請看上方提示後再試一次。');
     } catch (e) { setMsg(e.message); }
     finally { setBusy(false); }
@@ -701,27 +707,23 @@ function AddQuestion({ subjects, onDone }) {
         <select value={subject} onChange={(e) => setSubject(e.target.value)}>{subjects.map((s) => <option key={s}>{s}</option>)}</select>
       </label>
       <div>
-        <div className="field-label" style={{ marginBottom: 6 }}>題目圖片(最多 3 張,一張圖可以有多題)</div>
+        <div className="field-label" style={{ marginBottom: 6 }}>題目 PDF 檔(最大 3 MB,建議一次 10 頁以內)</div>
         <div className="row wrapr">
-          <label className="pillbtn">＋ 選擇圖片<input type="file" accept="image/*" multiple hidden onChange={pick} /></label>
-          <label className="pillbtn cam-only">📷 拍照<input type="file" accept="image/*" capture="environment" hidden onChange={pick} /></label>
-          {files.length > 0 && <span className="muted">已選 {files.length} 張</span>}
-          {files.length > 0 && <button type="button" className="sec small" onClick={() => setFiles([])}>清除</button>}
+          <label className="pillbtn">＋ 選擇 PDF 檔<input type="file" accept="application/pdf,.pdf" hidden onChange={pick} /></label>
+          {file && <span className="muted" style={{ overflowWrap: 'anywhere' }}>📄 {file.name}({(file.size / 1024 / 1024).toFixed(1)} MB)</span>}
+          {file && <button type="button" className="sec small" onClick={() => setFile(null)}>移除</button>}
         </div>
+        <div className="muted" style={{ marginTop: 6 }}>一個 PDF 裡有很多題也可以,AI 會一題一題拆開。檔案中如果附有答案頁,AI 會一併讀取。</div>
       </div>
       <label><span className="field-label">或直接貼上題目文字(選填)</span>
-        <textarea rows={4} maxLength={6000} value={text} onChange={(e) => setText(e.target.value)} placeholder="沒有圖片時,貼上題目與選項" />
+        <textarea rows={4} maxLength={6000} value={text} onChange={(e) => setText(e.target.value)} placeholder="沒有 PDF 時,貼上題目與選項" />
       </label>
       <label><span className="field-label">答案(選填;多題請依題號用逗號分開,例如 B,D,A)</span>
         <input value={answers} onChange={(e) => setAnswers(e.target.value)} placeholder="沒填的題目,會由 AI 判斷答案" />
       </label>
-      <div className="row between">
-        <span>保留原圖給學生看(題目有圖表時建議開啟)</span>
-        <Toggle checked={keep} onChange={setKeep} label="保留原圖" />
-      </div>
       {msg && <div className="alert bad">{msg}</div>}
-      <button disabled={busy || !source.trim() || (!files.length && !text.trim())} onClick={submit}>{busy ? 'AI 辨識中,請稍候...' : 'AI 辨識並新增'}</button>
-      <div className="muted">AI 產生的答案可能有誤,新增後請在題庫中檢查;沒有答案的題目不會開放給學生。</div>
+      <button disabled={busy || !source.trim() || (!file && !text.trim())} onClick={submit}>{busy ? 'AI 辨識中,可能需要 1~2 分鐘...' : 'AI 辨識並新增'}</button>
+      <div className="muted">AI 產生的答案可能有誤,新增後請在題庫中檢查;沒有答案的題目不會開放給使用者。題目中的圖表會以文字描述呈現。</div>
     </div>
   );
 }
@@ -758,8 +760,8 @@ function QuestionItem({ q, subjects, post }) {
           ? <div className="grid3">{imgs.map((b, i) => <img key={i} alt="" src={`data:image/jpeg;base64,${b}`} style={{ width: '100%', borderRadius: 8 }} />)}</div>
           : <button className="sec small" onClick={async () => setImgs((await api(`/api/review/admin?id=${q.id}`)).images)}>載入原圖({q.image_count})</button>)}
         <div className="row between">
-          <span>開放給學生{!answer.trim() && <small className="muted"> (需先有答案)</small>}</span>
-          <Toggle checked={q.active} onChange={(v) => post({ action: 'update', id: q.id, active: v }, v ? '已開放' : '已下架')} label="開放給學生" />
+          <span>開放給使用者{!answer.trim() && <small className="muted"> (需先有答案)</small>}</span>
+          <Toggle checked={q.active} onChange={(v) => post({ action: 'update', id: q.id, active: v }, v ? '已開放' : '已下架')} label="開放給使用者" />
         </div>
         <div className="row">
           <button style={{ flex: 1 }} disabled={!dirty} onClick={() => post({ action: 'update', id: q.id, source, subject, stem, answer }, '題目已更新')}>{dirty ? '儲存變更' : '沒有變更'}</button>

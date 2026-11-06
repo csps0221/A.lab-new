@@ -128,7 +128,7 @@ export default function LabAI({ me, subjects, onBack, onUsed, initialChatId }) {
             </div>
             <div className="lab-foot"><span>送出後自動建立聊天紀錄</span><span>{text.length} / {MAX}</span></div>
           </div>
-          <div className="lab-note">僅限學科問題,AI回答僅供參考,若有問題請與課本或老師核對</div>
+          <div className="lab-note">僅限學科問題,AI回答僅供參考,若有問題請與課本或管理員核對</div>
         </>
       )}
     </div>

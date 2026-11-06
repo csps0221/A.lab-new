@@ -223,13 +223,13 @@ export default function Page() {
       <SideMenu open={menuOpen} onClose={() => setMenuOpen(false)} user={me}
         items={[
           { key: 'lab', icon: '💬', label: 'LAB AI', desc: '學科聊天助教', onClick: () => { setLabChatId(null); go('lab'); } },
-          { key: 'review', icon: '📚', label: '考前複習', desc: me.review_enabled || isAdmin ? '題庫練習,答錯有 AI 解析' : '老師開放後才能使用',
+          { key: 'review', icon: '📚', label: '考前複習', desc: me.review_enabled || isAdmin ? '題庫練習,答錯有 AI 解析' : '管理員開放後才能使用',
             badge: !me.review_enabled && !isAdmin ? '未開放' : (!me.review_enabled && isAdmin ? '測試中' : ''), disabled: !me.review_enabled && !isAdmin, onClick: () => go('review') },
         ]} />
 
       <footer className="foot">
         <b>SCIENCE LAB</b>
-        <div>A.lab | 解題實驗室 v2.3.0</div>
+        <div>A.lab | 解題實驗室 v3.1.0</div>
       </footer>
 
       <nav className="bottomnav" aria-label="主要導覽">

@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 const err = (m, s = 400) => NextResponse.json({ error: m }, { status: s });
 const norm = (s) => [...new Set(String(s || '').toUpperCase().match(/[A-Z]/g) || [])].sort().join('');
-// 給學生的題目:不含答案
+// 給使用者的題目:不含答案
 const pub = (q) => ({
   id: q.id, source: q.source, subject: q.subject, type: q.type, stem: q.stem, options: q.options || [],
   multi: q.type === 'choice' && norm(q.answer).length > 1, image_count: q.image_count || 0,

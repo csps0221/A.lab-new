@@ -3,7 +3,7 @@ import { getSessionUser } from '@/lib/auth';
 import * as db from '@/lib/db';
 import { recognizeQuestions, friendlyError } from '@/lib/ai';
 
-export const maxDuration = 60;
+export const maxDuration = 120; // PDF 辨識題目較多時需要比較久
 export const dynamic = 'force-dynamic';
 
 const err = (m, s = 400) => NextResponse.json({ error: m }, { status: s });
@@ -55,18 +55,18 @@ export async function POST(req) {
       if (!source) return err('請填寫題目來源(例如:113 學測、第二次段考)');
       const subject = cfg.subjects.includes(b.subject) ? b.subject : cfg.subjects[0];
       const text = String(b.text || '').trim().slice(0, 6000);
-      const images = (Array.isArray(b.images) ? b.images : []).filter((s) => typeof s === 'string').slice(0, 3);
-      if (!text && !images.length) return err('請上傳題目圖片,或貼上題目文字');
+      const pdf = typeof b.pdf === 'string' ? b.pdf : '';
+      if (pdf.length > 4_300_000) return err('PDF 檔案太大(上限約 3 MB),請壓縮或分成幾個檔案上傳');
+      if (!text && !pdf) return err('請上傳題目 PDF 檔,或貼上題目文字');
       if (!cfg.enable_gemini && !cfg.enable_openai) return err('AI 服務目前已關閉,請先到「AI 設定」開啟。', 503);
 
       let found;
-      try { found = await recognizeQuestions({ images, text, subject }, cfg); }
+      try { found = await recognizeQuestions({ pdf, text, subject }, cfg); }
       catch (e) { return err(friendlyError(e), 502); }
-      if (!found.length) return err('AI 沒有辨識出題目,請換一張更清楚的圖片,或直接貼上文字。');
+      if (!found.length) return err('AI 沒有辨識出題目,請確認 PDF 內容清楚可讀(掃描檔請確保文字清晰),或直接貼上文字。');
 
       // 管理員提供的答案(依題號順序,以逗號或空白分隔);沒提供的由 AI 判斷
       const given = String(b.answers || '').split(/[,\s,、;;]+/).map((s) => s.trim()).filter(Boolean);
-      const keepImg = !!b.keepImages;
       const ts = Date.now();
       let noAnswer = 0, byAdmin = 0;
       for (let i = 0; i < found.length; i++) {
@@ -77,13 +77,11 @@ export async function POST(req) {
         const answer_by = adminAns ? 'admin' : answer ? 'ai' : 'none';
         if (adminAns) byAdmin++;
         if (!answer) noAnswer++;
-        const attach = images.length && (keepImg || f.has_figure) ? images : [];
         const q = {
           id: `${ts}-${String(i).padStart(2, '0')}-${Math.random().toString(36).slice(2, 6)}`,
           ts, idx: i, source, subject, type: f.type, stem: f.stem, options, answer, answer_by,
-          active: !!answer, explanation: null, has_figure: f.has_figure, image_count: attach.length, created: db.nowStr(),
+          active: !!answer, explanation: null, has_figure: f.has_figure, image_count: 0, created: db.nowStr(),
         };
-        if (attach.length) await db.saveQuestionImages(q.id, attach);
         await db.putQuestion(q);
       }
       return NextResponse.json({
