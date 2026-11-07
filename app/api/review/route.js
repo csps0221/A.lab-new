@@ -27,7 +27,7 @@ export async function GET(req) {
   const [all, prog] = await Promise.all([db.listQuestions(), db.getProgress(user.username)]);
   const pool = all.filter((q) => q.active && allowed.includes(q.subject));
 
-  if (!sp.get('next')) {
+  if (!sp.get('session')) {
     const sources = {}, subjects = {};
     pool.forEach((q) => { sources[q.source] = (sources[q.source] || 0) + 1; subjects[q.subject] = (subjects[q.subject] || 0) + 1; });
     const mine = pool.filter((q) => prog[q.id]);
@@ -35,21 +35,31 @@ export async function GET(req) {
       enabled: true, limit, used, total: pool.length, answered: mine.length, correct: mine.filter((q) => prog[q.id].c).length,
       sources: Object.entries(sources).map(([name, count]) => ({ name, count })),
       subjects: Object.entries(subjects).map(([name, count]) => ({ name, count })),
+      index: pool.map((q) => [q.subject, q.source]), // 讓畫面可以算出「這個科目 / 來源有幾題」
     });
   }
 
-  // 出下一題:優先沒做過的 → 做錯的 → 全部答對後才重複
-  const source = sp.get('source') || '', subject = sp.get('subject') || '', exclude = sp.get('exclude') || '';
-  const match = (q) => (!source || q.source === source) && (!subject || q.subject === subject);
-  let cand = pool.filter((q) => match(q) && q.id !== exclude);
-  if (!cand.length) cand = pool.filter(match);
-  if (!cand.length) return NextResponse.json({ question: null });
-  const unseen = cand.filter((q) => !prog[q.id]);
-  const wrong = cand.filter((q) => prog[q.id] && !prog[q.id].c);
-  const from = unseen.length ? unseen : wrong.length ? wrong : cand;
-  const q = from[Math.floor(Math.random() * from.length)];
-  const images = await db.getQuestionImages(q.id, q.image_count || 0);
-  return NextResponse.json({ question: { ...pub(q), images }, state: unseen.length ? 'new' : wrong.length ? 'retry' : 'review' });
+  // 組一組練習題:使用者先選科目,再選題數。沒做過的優先 → 做錯的 → 答對過的
+  const subject = sp.get('subject') || '', source = sp.get('source') || '';
+  if (!subject) return err('請先選擇要練習的科目');
+  let count = Math.min(50, Math.max(1, parseInt(sp.get('count'), 10) || 10));
+  if (!isAdmin) {
+    const remain = limit - used;
+    if (remain <= 0) return err('今天的考前複習題數已用完,明天再來!', 429);
+    count = Math.min(count, remain);
+  }
+  const cand = pool.filter((q) => q.subject === subject && (!source || q.source === source));
+  const shuffle = (arr) => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const unseen = shuffle(cand.filter((q) => !prog[q.id]));
+  const wrong = shuffle(cand.filter((q) => prog[q.id] && !prog[q.id].c));
+  const done = shuffle(cand.filter((q) => prog[q.id] && prog[q.id].c));
+  const picked = shuffle([...unseen, ...wrong, ...done].slice(0, count));
+  const questions = await Promise.all(picked.map(async (q) => ({
+    ...pub(q),
+    state: !prog[q.id] ? 'new' : prog[q.id].c ? 'review' : 'retry',
+    images: q.image_count ? await db.getQuestionImages(q.id, q.image_count) : [],
+  })));
+  return NextResponse.json({ questions });
 }
 
 export async function POST(req) {
