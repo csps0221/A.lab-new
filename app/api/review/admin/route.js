@@ -50,7 +50,8 @@ export async function POST(req) {
       await db.saveConfig(cfg);
       return NextResponse.json({ ok: true, message: `預設每人每天可作答 ${cfg.review_default_limit} 題` });
     }
-    case 'create': {
+    case 'recognize': {
+      // 第一步:只辨識、不存檔,讓管理員預覽後再決定
       const source = String(b.source || '').trim().slice(0, 60);
       if (!source) return err('請填寫題目來源(例如:113 學測、第二次段考)');
       const subject = cfg.subjects.includes(b.subject) ? b.subject : cfg.subjects[0];
@@ -67,27 +68,46 @@ export async function POST(req) {
 
       // 管理員提供的答案(依題號順序,以逗號或空白分隔);沒提供的由 AI 判斷
       const given = String(b.answers || '').split(/[,\s,、;;]+/).map((s) => s.trim()).filter(Boolean);
-      const ts = Date.now();
-      let noAnswer = 0, byAdmin = 0;
-      for (let i = 0; i < found.length; i++) {
-        const f = found[i];
-        const options = f.type === 'choice' ? parseOptions(f.options) : [];
+      const drafts = found.map((f, i) => {
         const adminAns = given[i] ? (f.type === 'choice' ? norm(given[i]) : given[i]) : '';
         const answer = adminAns || (f.type === 'choice' ? norm(f.answer) : f.answer);
-        const answer_by = adminAns ? 'admin' : answer ? 'ai' : 'none';
-        if (adminAns) byAdmin++;
-        if (!answer) noAnswer++;
-        const q = {
-          id: `${ts}-${String(i).padStart(2, '0')}-${Math.random().toString(36).slice(2, 6)}`,
-          ts, idx: i, source, subject, type: f.type, stem: f.stem, options, answer, answer_by,
-          active: !!answer, explanation: null, has_figure: f.has_figure, image_count: 0, created: db.nowStr(),
+        return {
+          type: f.type, stem: f.stem, options: f.type === 'choice' ? parseOptions(f.options) : [],
+          answer, answer_by: adminAns ? 'admin' : answer ? 'ai' : 'none',
+          has_figure: f.has_figure, fig_page: f.fig_page, fig_box: f.fig_box,
         };
-        await db.putQuestion(q);
-      }
-      return NextResponse.json({
-        ok: true,
-        message: `已新增 ${found.length} 題(管理員答案 ${byAdmin} 題、AI 答案 ${found.length - byAdmin - noAnswer} 題${noAnswer ? `、無答案 ${noAnswer} 題,需補答案才會開放` : ''})`,
       });
+      return NextResponse.json({ ok: true, drafts });
+    }
+    case 'save': {
+      // 第二步:儲存管理員確認過的題目(圖片由瀏覽器從 PDF 截取後一併送來)
+      const source = String(b.source || '').trim().slice(0, 60);
+      if (!source) return err('請填寫題目來源');
+      const subject = cfg.subjects.includes(b.subject) ? b.subject : cfg.subjects[0];
+      const arr = (Array.isArray(b.questions) ? b.questions : []).slice(0, 10);
+      if (!arr.length) return err('沒有要儲存的題目');
+      const ts = Number(b.ts) || Date.now();
+      let n = 0, noAnswer = 0;
+      for (let i = 0; i < arr.length; i++) {
+        const d = arr[i];
+        const stem = String(d.stem || '').trim().slice(0, 6000);
+        if (!stem) continue;
+        const options = (Array.isArray(d.options) ? d.options : []).slice(0, 10).map((o) => ({ k: String(o.k || '').toUpperCase().slice(0, 2), t: String(o.t || '').slice(0, 1000) })).filter((o) => o.k);
+        const type = d.type === 'choice' && options.length ? 'choice' : 'text';
+        const answer = type === 'choice' ? norm(d.answer) : String(d.answer || '').trim().slice(0, 500);
+        const answer_by = answer ? (d.answer_by === 'ai' ? 'ai' : 'admin') : 'none';
+        const imgs = typeof d.image === 'string' && d.image && d.image.length < 1_500_000 ? [d.image] : [];
+        const idx = Number.isFinite(Number(d.idx)) ? Number(d.idx) : i;
+        const q = {
+          id: `${ts}-${String(idx).padStart(3, '0')}-${Math.random().toString(36).slice(2, 6)}`,
+          ts, idx, source, subject, type, stem, options, answer, answer_by,
+          active: !!answer, explanation: null, has_figure: !!d.has_figure, image_count: imgs.length, created: db.nowStr(),
+        };
+        if (imgs.length) await db.saveQuestionImages(q.id, imgs);
+        await db.putQuestion(q);
+        n++; if (!answer) noAnswer++;
+      }
+      return NextResponse.json({ ok: true, message: `已新增 ${n} 題${noAnswer ? `(其中 ${noAnswer} 題沒有答案,需補答案才會開放)` : ''}` });
     }
     case 'update': {
       const q = await db.getQuestion(String(b.id || ''));

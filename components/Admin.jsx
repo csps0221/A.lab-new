@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { api, pdfToB64, PDF_MAX } from '@/lib/client';
+import { api, pdfToB64, PDF_MAX, renderPdfFigures } from '@/lib/client';
 import Md from './Md';
 
 const GEMINI = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.1-pro'];
@@ -646,7 +646,7 @@ function ReviewAdminTab({ subjects, notify }) {
         <button className={adding ? 'sec' : ''} style={{ flex: 'none' }} onClick={() => setAdding((a) => !a)}>{adding ? '取消' : '＋ 新增題目'}</button>
       </div>
 
-      {adding && <AddQuestion subjects={subjects} onDone={async (body) => { const ok = await post(body); if (ok) setAdding(false); return ok; }} />}
+      {adding && <AddQuestion subjects={subjects} notify={notify} onSaved={async () => { await load(); setAdding(false); }} />}
 
       {all.length > 0 && (
         <div className="grid2">
@@ -669,14 +669,16 @@ function ReviewAdminTab({ subjects, notify }) {
   );
 }
 
-function AddQuestion({ subjects, onDone }) {
+function AddQuestion({ subjects, notify, onSaved }) {
   const [source, setSource] = useState('');
   const [subject, setSubject] = useState(subjects[0] || '');
   const [file, setFile] = useState(null);
   const [text, setText] = useState('');
   const [answers, setAnswers] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(''); // '' / recognize / figures / save
+  const [prog, setProg] = useState('');
   const [msg, setMsg] = useState('');
+  const [drafts, setDrafts] = useState(null); // 辨識結果(預覽,尚未儲存)
 
   const pick = (e) => {
     const f = e.target.files?.[0];
@@ -686,17 +688,92 @@ function AddQuestion({ subjects, onDone }) {
     if (f.size > PDF_MAX) return setMsg('PDF 太大了(上限 3 MB),請壓縮或分成幾個檔案上傳');
     setMsg(''); setFile(f);
   };
+  const setD = (key, patch) => setDrafts((p) => p.map((d) => (d.key === key ? { ...d, ...patch } : d)));
 
-  async function submit() {
-    setBusy(true); setMsg('');
+  async function recognize() {
+    setBusy('recognize'); setMsg(''); setDrafts(null);
     try {
       const pdf = file ? await pdfToB64(file) : '';
-      const ok = await onDone({ action: 'create', source, subject, text, answers, pdf });
-      if (!ok) setMsg('新增失敗,請看上方提示後再試一次。');
+      const r = await api('/api/review/admin', { method: 'POST', body: { action: 'recognize', source, subject, text, answers, pdf } });
+      let list = r.drafts.map((d, i) => ({ ...d, key: i, include: true, image: '' }));
+      // 需要看圖的題目:在瀏覽器裡把 PDF 該頁(該區塊)截圖,使用者作答時就看得到圖
+      const jobs = list.filter((d) => d.has_figure && d.fig_page).map((d) => ({ key: d.key, page: d.fig_page, box: d.fig_box }));
+      if (file && jobs.length) {
+        setBusy('figures'); setProg(`正在擷取 ${jobs.length} 題的題目圖片…`);
+        try {
+          const imgs = await renderPdfFigures(file, jobs);
+          list = list.map((d) => (imgs[d.key] ? { ...d, image: imgs[d.key] } : d));
+        } catch (e) { setMsg(`題目圖片擷取失敗(${e.message}),這些題目會以文字描述呈現。`); }
+      }
+      setDrafts(list);
     } catch (e) { setMsg(e.message); }
-    finally { setBusy(false); }
+    finally { setBusy(''); setProg(''); }
   }
 
+  async function save() {
+    const chosen = drafts.filter((d) => d.include);
+    if (!chosen.length) return setMsg('請至少勾選一題');
+    setBusy('save'); setMsg('');
+    try {
+      const ts = Date.now();
+      let saved = 0, batch = [], size = 0;
+      const flush = async () => {
+        if (!batch.length) return;
+        await api('/api/review/admin', { method: 'POST', body: { action: 'save', source, subject, ts, questions: batch } });
+        saved += batch.length; batch = []; size = 0;
+      };
+      for (const d of chosen) {
+        const item = { idx: d.key, type: d.type, stem: d.stem, options: d.options, answer: d.answer, answer_by: d.answer_by, has_figure: d.has_figure, image: d.image };
+        if (batch.length >= 10 || (batch.length && size + d.image.length > 1_200_000)) await flush(); // 分批送出,避免超過上傳大小上限
+        batch.push(item); size += d.image.length;
+      }
+      await flush();
+      notify(`已新增 ${saved} 題`);
+      await onSaved();
+    } catch (e) { setMsg(e.message); }
+    finally { setBusy(''); }
+  }
+
+  /* ---------- 預覽辨識結果 ---------- */
+  if (drafts) {
+    const n = drafts.filter((d) => d.include).length;
+    return (
+      <div className="stack">
+        <div className="card stack">
+          <h4>確認辨識結果({drafts.length} 題)</h4>
+          <div className="muted">請檢查題目與答案。AI 的答案可能有誤,可以直接修改;不需要的題目取消勾選。沒有答案的題目不會開放給使用者。</div>
+          {msg && <div className="alert bad">{msg}</div>}
+        </div>
+        {drafts.map((d, i) => (
+          <div key={d.key} className={`card stack ${d.include ? '' : 'dim'}`}>
+            <div className="row between">
+              <label className="inline"><input type="checkbox" checked={d.include} onChange={(e) => setD(d.key, { include: e.target.checked })} /> 第 {i + 1} 題 · {d.type === 'choice' ? '選擇題' : '非選擇題'}</label>
+              <span className={`tag ${d.answer_by === 'none' ? 'bad' : ''}`}>{d.answer_by === 'admin' ? '管理員答案' : d.answer_by === 'ai' ? 'AI 答案' : '無答案'}</span>
+            </div>
+            <div className="clamp" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{d.stem}</div>
+            {d.options.length > 0 && <div className="stack" style={{ gap: 2 }}>{d.options.map((o) => <small key={o.k} className="muted" style={{ overflowWrap: 'anywhere' }}>({o.k}) {o.t}</small>)}</div>}
+            {d.image && (
+              <div className="stack" style={{ gap: 6 }}>
+                <img alt="題目圖片" src={`data:image/jpeg;base64,${d.image}`} style={{ width: '100%', maxHeight: 220, objectFit: 'contain', borderRadius: 8, background: '#fff' }} />
+                <button type="button" className="sec small" style={{ alignSelf: 'flex-start' }} onClick={() => setD(d.key, { image: '' })}>不附圖</button>
+              </div>
+            )}
+            {d.has_figure && !d.image && <div className="muted">這題需要看圖,但沒有附上圖片(使用者只會看到文字描述)。</div>}
+            <label className="fld"><span className="field-label">答案{d.type === 'choice' ? '(選項字母)' : ''}</span>
+              <input value={d.answer} onChange={(e) => setD(d.key, { answer: e.target.value, answer_by: e.target.value.trim() ? 'admin' : 'none' })} placeholder="必填才能開放" />
+            </label>
+          </div>
+        ))}
+        <div className="row">
+          <button style={{ flex: 1 }} disabled={busy === 'save' || !n} onClick={save}>{busy === 'save' ? '儲存中...' : `儲存 ${n} 題`}</button>
+          <button className="sec" style={{ flex: 'none' }} disabled={busy === 'save'} onClick={() => { setDrafts(null); setMsg(''); }}>重新辨識</button>
+        </div>
+      </div>
+    );
+  }
+
+  /* ---------- 上傳 ---------- */
+  const working = busy === 'recognize' || busy === 'figures';
   return (
     <div className="card stack">
       <h4>新增題目</h4>
@@ -713,7 +790,7 @@ function AddQuestion({ subjects, onDone }) {
           {file && <span className="muted" style={{ overflowWrap: 'anywhere' }}>📄 {file.name}({(file.size / 1024 / 1024).toFixed(1)} MB)</span>}
           {file && <button type="button" className="sec small" onClick={() => setFile(null)}>移除</button>}
         </div>
-        <div className="muted" style={{ marginTop: 6 }}>一個 PDF 裡有很多題也可以,AI 會一題一題拆開。檔案中如果附有答案頁,AI 會一併讀取。</div>
+        <div className="muted" style={{ marginTop: 6 }}>一個 PDF 裡有很多題也可以,AI 會一題一題拆開。題目需要看圖時,系統會自動把 PDF 裡那一題截成圖片,讓使用者作答時看得到。檔案中如果附有答案頁,AI 會一併讀取。</div>
       </div>
       <label><span className="field-label">或直接貼上題目文字(選填)</span>
         <textarea rows={4} maxLength={6000} value={text} onChange={(e) => setText(e.target.value)} placeholder="沒有 PDF 時,貼上題目與選項" />
@@ -722,8 +799,10 @@ function AddQuestion({ subjects, onDone }) {
         <input value={answers} onChange={(e) => setAnswers(e.target.value)} placeholder="沒填的題目,會由 AI 判斷答案" />
       </label>
       {msg && <div className="alert bad">{msg}</div>}
-      <button disabled={busy || !source.trim() || (!file && !text.trim())} onClick={submit}>{busy ? 'AI 辨識中,可能需要 1~2 分鐘...' : 'AI 辨識並新增'}</button>
-      <div className="muted">AI 產生的答案可能有誤,新增後請在題庫中檢查;沒有答案的題目不會開放給使用者。題目中的圖表會以文字描述呈現。</div>
+      <button disabled={working || !source.trim() || (!file && !text.trim())} onClick={recognize}>
+        {busy === 'recognize' ? 'AI 辨識中,可能需要 1~2 分鐘...' : busy === 'figures' ? prog : 'AI 辨識題目'}
+      </button>
+      <div className="muted">辨識完成後會先讓你預覽、修改,確認沒問題才會儲存。</div>
     </div>
   );
 }

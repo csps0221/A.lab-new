@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth';
 import * as db from '@/lib/db';
-import { explainWrong, judgeText, friendlyError } from '@/lib/ai';
+import { explainWrong, judgeText, weaknessAnalysis, friendlyError } from '@/lib/ai';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -13,6 +13,36 @@ const pub = (q) => ({
   id: q.id, source: q.source, subject: q.subject, type: q.type, stem: q.stem, options: q.options || [],
   multi: q.type === 'choice' && norm(q.answer).length > 1, image_count: q.image_count || 0,
 });
+
+// 彙整成績與弱點:各科/各來源答對率、最近幾次練習、常答錯的題目
+async function buildStats(username) {
+  const [log, all] = await Promise.all([db.getReviewLog(username), db.listQuestions()]);
+  const qmap = Object.fromEntries(all.map((q) => [q.id, q]));
+  const tally = (key) => {
+    const m = {};
+    log.forEach((l) => { const k = l[key] || '(未分類)'; (m[k] ||= { name: k, total: 0, correct: 0 }); m[k].total += 1; if (l.c) m[k].correct += 1; });
+    return Object.values(m).sort((a, b) => b.total - a.total);
+  };
+  const sess = new Map(); // log 由新到舊
+  log.forEach((l) => {
+    const id = l.sid || l.t;
+    if (!sess.has(id)) sess.set(id, { sid: id, time: l.t, subject: l.subject, source: l.source, total: 0, correct: 0, items: [] });
+    const x = sess.get(id); x.total += 1; if (l.c) x.correct += 1; x.items.push({ qid: l.qid, c: l.c });
+  });
+  const wrong = {}, seen = {};
+  log.forEach((l) => { seen[l.qid] = (seen[l.qid] || 0) + 1; if (!l.c) wrong[l.qid] = (wrong[l.qid] || 0) + 1; });
+  const missed = Object.entries(wrong).sort((a, b) => b[1] - a[1]).slice(0, 10)
+    .map(([id, w]) => ({ id, q: qmap[id], wrong: w, total: seen[id] })).filter((m) => m.q)
+    .map((m) => ({ id: m.id, subject: m.q.subject, source: m.q.source, stem: m.q.stem.replace(/\s+/g, ' ').slice(0, 160), wrong: m.wrong, total: m.total }));
+  return {
+    overall: { answers: log.length, correct: log.filter((l) => l.c).length, sessions: sess.size },
+    sessions: [...sess.values()].slice(0, 20).map((s) => ({
+      ...s,
+      items: s.items.reverse().map((it) => ({ c: it.c, stem: (qmap[it.qid]?.stem || '(題目已刪除)').replace(/\s+/g, ' ').slice(0, 70) })),
+    })),
+    bySubject: tally('subject'), bySource: tally('source'), missed,
+  };
+}
 
 export async function GET(req) {
   const [user, cfg] = await Promise.all([getSessionUser(), db.getConfig()]);
@@ -26,6 +56,11 @@ export async function GET(req) {
   const sp = new URL(req.url).searchParams;
   const [all, prog] = await Promise.all([db.listQuestions(), db.getProgress(user.username)]);
   const pool = all.filter((q) => q.active && allowed.includes(q.subject));
+
+  if (sp.get('stats')) {
+    const [stats, analysis] = await Promise.all([buildStats(user.username), db.getAnalysis(user.username)]);
+    return NextResponse.json({ ...stats, analysis: analysis || null });
+  }
 
   if (!sp.get('session')) {
     const sources = {}, subjects = {};
@@ -56,6 +91,7 @@ export async function GET(req) {
   const picked = shuffle([...unseen, ...wrong, ...done].slice(0, count));
   const questions = await Promise.all(picked.map(async (q) => ({
     ...pub(q),
+    answer: q.answer, answer_by: q.answer_by, // 連答案一起載入,畫面上就能立刻批改
     state: !prog[q.id] ? 'new' : prog[q.id].c ? 'review' : 'retry',
     images: q.image_count ? await db.getQuestionImages(q.id, q.image_count) : [],
   })));
@@ -69,6 +105,20 @@ export async function POST(req) {
   if (!isAdmin && !cfg.review_enabled) return err('考前複習目前尚未開放。', 403);
 
   const b = await req.json().catch(() => ({}));
+  if (b.action === 'analyze') {
+    const prev = await db.getAnalysis(user.username);
+    if (prev && Date.now() - prev.ts < 3600000) return NextResponse.json({ analysis: prev, cached: true });
+    const st = await buildStats(user.username);
+    if (!st.missed.length) return err('還沒有答錯的題目可以分析,先去練習幾題吧!');
+    let text;
+    try { text = await weaknessAnalysis({ subjectStats: st.bySubject, missed: st.missed }, cfg); }
+    catch (e) { return err(friendlyError(e), 502); }
+    const analysis = { text, time: db.nowStr(), ts: Date.now() };
+    await db.setAnalysis(user.username, analysis);
+    return NextResponse.json({ analysis });
+  }
+
+  const sid = String(b.sid || '').slice(0, 40);
   const answer = String(b.answer || '').trim().slice(0, 500);
   if (!answer) return err('請先作答');
 
@@ -106,6 +156,7 @@ export async function POST(req) {
   const prev = (await db.getProgress(user.username))[q.id];
   await Promise.all([
     db.setProgress(user.username, q.id, { c: correct, n: (prev?.n || 0) + 1, t: db.nowStr() }),
+    db.logReview(user.username, { sid, qid: q.id, subject: q.subject, source: q.source, c: correct, t: db.nowStr() }),
     isAdmin ? null : db.bumpReview(user.username),
   ]);
   return NextResponse.json({

@@ -487,3 +487,6 @@ button.ropt:disabled { opacity:1; }
 .alist > *, .rv, .rv summary { min-width:0; }
 .card.rv { overflow:hidden; }
 .rv-sub { display:block; max-width:100%; }
+
+/* ===== 成績與弱點分析:弱點的進度條用柔和的紅色 ===== */
+.bar > i.low { background:linear-gradient(90deg,#B5474A,#C97173); }
